@@ -1,7 +1,7 @@
 
 ## Team Split (3 Members)
 
-### Member A — Core Infrastructure + Filesystem
+### Sumukha — Core Infrastructure + Filesystem
 **Why:** Everything else depends on this layer. Gets the foundation working first.
 
 | Week | Tasks |
@@ -19,7 +19,7 @@
 
 ---
 
-### Member B — Registry + Anti-Fingerprint + Event Logs
+### Snehal — Registry + Anti-Fingerprint + Event Logs
 **Why:** These are the deepest Windows internals — one person should own the binary format knowledge.
 
 | Week | Tasks |
@@ -37,7 +37,7 @@
 
 ---
 
-### Member C — Browser + Applications + Evaluation
+### Raghottam — Browser + Applications + Evaluation
 **Why:** Browser artifacts are SQLite-heavy and self-contained. Evaluation ties everything together at the end.
 
 | Week | Tasks |
