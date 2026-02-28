@@ -3,3 +3,4 @@ pywin32
 ruamel.yaml
 pydantic
 deepmerge
+faker
