@@ -1,0 +1,93 @@
+{
+    "system_vendors": [
+        {
+            "bios_vendor": "Dell Inc.",
+            "bios_versions": ["1.15.0", "2.3.1", "A14", "1.22.0", "2.8.0"],
+            "motherboard_models": [
+                "Dell Inc. 0T7D40",
+                "Dell Inc. 06D7TR",
+                "Dell Inc. 0KWVT8",
+                "Dell Inc. 0VNP2H",
+                "Dell Inc. 0X30MX"
+            ]
+        },
+        {
+            "bios_vendor": "Hewlett-Packard",
+            "bios_versions": ["F.73", "F.62", "N01 Ver. 02.19", "L01 v02.73", "J51 v01.08"],
+            "motherboard_models": [
+                "HP 8054",
+                "HP 18E7",
+                "HP 339A",
+                "HP 2B4B",
+                "HP 8710"
+            ]
+        },
+        {
+            "bios_vendor": "Lenovo",
+            "bios_versions": ["N2CET64W (1.41)", "JUCN57WW", "R0IET63W (1.30)", "N3HET30W (1.13)"],
+            "motherboard_models": [
+                "Lenovo 20Y7S0GV00",
+                "Lenovo 20VE00FLUS",
+                "Lenovo LNVNB161216",
+                "Lenovo 21DDS01B00",
+                "Lenovo 20XW0080US"
+            ]
+        },
+        {
+            "bios_vendor": "American Megatrends Inc.",
+            "bios_versions": ["3801", "2202", "0805", "1201", "2801"],
+            "motherboard_models": [
+                "ASUSTeK COMPUTER INC. PRIME B550M-A",
+                "ASUSTeK COMPUTER INC. ROG STRIX B450-F GAMING",
+                "Gigabyte Technology Co., Ltd. B550 AORUS ELITE",
+                "MSI MAG B550 TOMAHAWK",
+                "ASUSTeK COMPUTER INC. TUF GAMING B660M-PLUS"
+            ]
+        },
+        {
+            "bios_vendor": "Phoenix Technologies Ltd.",
+            "bios_versions": ["6.00", "4.0 Release 6.0", "SCT21 R1.7.0", "3.0 Release 8.0"],
+            "motherboard_models": [
+                "Acer Aspire A315-56",
+                "Acer Nitro AN515-54",
+                "Toshiba Satellite C55-C",
+                "Samsung 950XCJ/951XCJ/950XCR",
+                "Acer Predator PH315-53"
+            ]
+        }
+    ],
+    "disk_models": [
+        "Samsung SSD 870 EVO 500GB",
+        "Samsung SSD 980 PRO 1TB",
+        "WDC WD10EZEX-08WN4A0",
+        "WDC WD20EARX-00PASB0",
+        "Seagate ST1000DM010-2EP102",
+        "Seagate ST2000DM008-2FR102",
+        "Toshiba MQ01ABD100",
+        "Toshiba HDWD110",
+        "Kingston SA400S37480G",
+        "Crucial CT500MX500SSD1",
+        "Intel SSDPEKNW512G8",
+        "SK hynix BC711 HFM512GD3JX013N",
+        "Micron 2450 MTFDKBA512TFK",
+        "SanDisk SDSSDA-240G-G26",
+        "LITEON CV8-8E128-HP"
+    ],
+    "gpu_models": [
+        "NVIDIA GeForce RTX 3060",
+        "NVIDIA GeForce RTX 3070",
+        "NVIDIA GeForce RTX 2060",
+        "NVIDIA GeForce GTX 1650",
+        "NVIDIA GeForce GTX 1660 Ti",
+        "NVIDIA GeForce RTX 4060",
+        "NVIDIA GeForce RTX 4070",
+        "Intel UHD Graphics 630",
+        "Intel UHD Graphics 730",
+        "Intel Iris Xe Graphics",
+        "Intel HD Graphics 620",
+        "AMD Radeon RX 580",
+        "AMD Radeon RX 6600 XT",
+        "AMD Radeon RX 6700 XT",
+        "AMD Radeon Vega 8 Graphics"
+    ]
+}
