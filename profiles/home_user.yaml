@@ -1,0 +1,16 @@
+username: "home_user"
+organization: "personal"
+installed_apps:
+  - spotify
+  - vlc
+  - chrome
+browsing:
+  categories:
+    - social_media
+    - entertainment
+    - shopping
+  daily_avg_sites: 20
+work_hours:
+  start: 18
+  end: 23
+  active_days: [6, 7]
