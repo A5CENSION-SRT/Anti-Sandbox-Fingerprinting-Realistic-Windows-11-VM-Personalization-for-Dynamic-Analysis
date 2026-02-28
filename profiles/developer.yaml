@@ -1,0 +1,12 @@
+extends: office_user
+installed_apps:
+  - vscode
+  - docker
+  - git
+  - terminal
+browsing:
+  categories:
+    - stackoverflow
+    - github
+    - documentation
+  daily_avg_sites: 30
