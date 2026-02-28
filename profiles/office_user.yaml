@@ -1,0 +1,11 @@
+organization: "acme_corp"
+installed_apps:
+  - outlook
+  - teams
+  - excel
+  - word
+browsing:
+  categories:
+    - business
+    - news
+  daily_avg_sites: 15

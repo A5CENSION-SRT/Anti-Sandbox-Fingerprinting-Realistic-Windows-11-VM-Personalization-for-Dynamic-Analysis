@@ -1,2 +1,5 @@
 pyyaml
 pywin32
+ruamel.yaml
+pydantic
+deepmerge

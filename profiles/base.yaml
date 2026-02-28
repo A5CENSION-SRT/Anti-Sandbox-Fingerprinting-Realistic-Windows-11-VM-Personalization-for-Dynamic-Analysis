@@ -1,0 +1,14 @@
+username: "default_user"
+organization: "default_org"
+locale: "en_US"
+installed_apps:
+  - notepad
+  - calculator
+browsing:
+  categories:
+    - general
+  daily_avg_sites: 5
+work_hours:
+  start: 9
+  end: 17
+  active_days: [1, 2, 3, 4, 5]
