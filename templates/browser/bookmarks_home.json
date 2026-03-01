@@ -1,0 +1,181 @@
+{
+    "checksum": "",
+    "roots": {
+        "bookmark_bar": {
+            "children": [
+                {
+                    "name": "Social",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Facebook",
+                            "type": "url",
+                            "url": "https://www.facebook.com/"
+                        },
+                        {
+                            "name": "Instagram",
+                            "type": "url",
+                            "url": "https://www.instagram.com/"
+                        },
+                        {
+                            "name": "X (Twitter)",
+                            "type": "url",
+                            "url": "https://twitter.com/home"
+                        },
+                        {
+                            "name": "Reddit",
+                            "type": "url",
+                            "url": "https://www.reddit.com/"
+                        },
+                        {
+                            "name": "TikTok",
+                            "type": "url",
+                            "url": "https://www.tiktok.com/"
+                        },
+                        {
+                            "name": "Pinterest",
+                            "type": "url",
+                            "url": "https://www.pinterest.com/"
+                        },
+                        {
+                            "name": "Discord",
+                            "type": "url",
+                            "url": "https://discord.com/channels/@me"
+                        }
+                    ]
+                },
+                {
+                    "name": "Entertainment",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "YouTube",
+                            "type": "url",
+                            "url": "https://www.youtube.com/"
+                        },
+                        {
+                            "name": "Netflix",
+                            "type": "url",
+                            "url": "https://www.netflix.com/browse"
+                        },
+                        {
+                            "name": "Spotify",
+                            "type": "url",
+                            "url": "https://open.spotify.com/"
+                        },
+                        {
+                            "name": "Twitch",
+                            "type": "url",
+                            "url": "https://www.twitch.tv/"
+                        },
+                        {
+                            "name": "Steam",
+                            "type": "url",
+                            "url": "https://store.steampowered.com/"
+                        },
+                        {
+                            "name": "Crunchyroll",
+                            "type": "url",
+                            "url": "https://www.crunchyroll.com/"
+                        },
+                        {
+                            "name": "IMDb",
+                            "type": "url",
+                            "url": "https://www.imdb.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "Shopping",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Amazon",
+                            "type": "url",
+                            "url": "https://www.amazon.com/"
+                        },
+                        {
+                            "name": "eBay",
+                            "type": "url",
+                            "url": "https://www.ebay.com/"
+                        },
+                        {
+                            "name": "Etsy",
+                            "type": "url",
+                            "url": "https://www.etsy.com/"
+                        },
+                        {
+                            "name": "Nike",
+                            "type": "url",
+                            "url": "https://www.nike.com/"
+                        },
+                        {
+                            "name": "IKEA",
+                            "type": "url",
+                            "url": "https://www.ikea.com/"
+                        },
+                        {
+                            "name": "Best Buy",
+                            "type": "url",
+                            "url": "https://www.bestbuy.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "Gmail",
+                    "type": "url",
+                    "url": "https://mail.google.com/mail/"
+                },
+                {
+                    "name": "Google Maps",
+                    "type": "url",
+                    "url": "https://www.google.com/maps"
+                },
+                {
+                    "name": "WhatsApp Web",
+                    "type": "url",
+                    "url": "https://www.whatsapp.com/"
+                }
+            ],
+            "name": "Bookmarks bar",
+            "type": "folder"
+        },
+        "other": {
+            "children": [
+                {
+                    "name": "Weather.com",
+                    "type": "url",
+                    "url": "https://www.weather.com/"
+                },
+                {
+                    "name": "Speedtest",
+                    "type": "url",
+                    "url": "https://www.speedtest.net/"
+                },
+                {
+                    "name": "Wikipedia",
+                    "type": "url",
+                    "url": "https://www.wikipedia.org/"
+                },
+                {
+                    "name": "Walmart",
+                    "type": "url",
+                    "url": "https://www.walmart.com/"
+                },
+                {
+                    "name": "Google Drive",
+                    "type": "url",
+                    "url": "https://drive.google.com/"
+                }
+            ],
+            "name": "Other bookmarks",
+            "type": "folder"
+        },
+        "synced": {
+            "children": [],
+            "name": "Mobile bookmarks",
+            "type": "folder"
+        }
+    },
+    "version": 1
+}

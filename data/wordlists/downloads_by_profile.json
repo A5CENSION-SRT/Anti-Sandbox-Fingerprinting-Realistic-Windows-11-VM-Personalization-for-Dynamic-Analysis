@@ -1,0 +1,218 @@
+{
+    "office_user": [
+        {
+            "filename": "Q4_Financial_Report_2024.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 2457600,
+            "referrer": "https://www.salesforce.com/",
+            "url": "https://reports.acmecorp.com/Q4_Financial_Report_2024.pdf"
+        },
+        {
+            "filename": "meeting_notes_jan2025.docx",
+            "mime_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "size_bytes": 38912,
+            "referrer": "https://teams.microsoft.com/",
+            "url": "https://acmecorp.sharepoint.com/sites/HR/meeting_notes_jan2025.docx"
+        },
+        {
+            "filename": "budget_template_2025.xlsx",
+            "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "size_bytes": 124928,
+            "referrer": "https://outlook.office365.com/",
+            "url": "https://acmecorp.sharepoint.com/Finance/budget_template_2025.xlsx"
+        },
+        {
+            "filename": "onboarding_guide_v3.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 5242880,
+            "referrer": "https://hr.acmecorp.com/",
+            "url": "https://hr.acmecorp.com/docs/onboarding_guide_v3.pdf"
+        },
+        {
+            "filename": "Teams_installer.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 108003328,
+            "referrer": "https://www.microsoft.com/",
+            "url": "https://statics.teams.cdn.office.net/production-windows-x64/24.1.0.21/Teams_installer.exe"
+        },
+        {
+            "filename": "Zoom_Setup.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 15728640,
+            "referrer": "https://zoom.us/download",
+            "url": "https://zoom.us/client/5.17.11/Zoom_Setup.exe"
+        },
+        {
+            "filename": "client_proposal_draft.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 892928,
+            "referrer": "https://docs.google.com/document/",
+            "url": "https://docs.google.com/document/d/export?format=pdf"
+        },
+        {
+            "filename": "linkedin_profile_export.zip",
+            "mime_type": "application/zip",
+            "size_bytes": 204800,
+            "referrer": "https://www.linkedin.com/settings/",
+            "url": "https://www.linkedin.com/dms/C4D0BAQH3n_j/profile-data.zip"
+        },
+        {
+            "filename": "company_policy_2025.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 1048576,
+            "referrer": "https://intranet.acmecorp.com/",
+            "url": "https://intranet.acmecorp.com/policies/company_policy_2025.pdf"
+        },
+        {
+            "filename": "chrome_installer.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 91750400,
+            "referrer": "https://www.google.com/chrome/",
+            "url": "https://dl.google.com/chrome/install/GoogleChromeStandaloneEnterprise64.msi"
+        }
+    ],
+    "developer": [
+        {
+            "filename": "Python-3.12.2-amd64.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 26214400,
+            "referrer": "https://www.python.org/downloads/",
+            "url": "https://www.python.org/ftp/python/3.12.2/python-3.12.2-amd64.exe"
+        },
+        {
+            "filename": "VSCodeSetup-x64-1.86.0.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 91750400,
+            "referrer": "https://code.visualstudio.com/download",
+            "url": "https://update.code.visualstudio.com/1.86.0/win32-x64/stable"
+        },
+        {
+            "filename": "Docker Desktop Installer.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 589398016,
+            "referrer": "https://docs.docker.com/get-docker/",
+            "url": "https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe"
+        },
+        {
+            "filename": "Git-2.43.0-64-bit.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 60817408,
+            "referrer": "https://git-scm.com/download/win",
+            "url": "https://github.com/git-for-windows/git/releases/download/v2.43.0.windows.1/Git-2.43.0-64-bit.exe"
+        },
+        {
+            "filename": "node-v20.11.0-x64.msi",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 31457280,
+            "referrer": "https://nodejs.org/en/download/",
+            "url": "https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi"
+        },
+        {
+            "filename": "postman-win64-Setup.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 167772160,
+            "referrer": "https://www.postman.com/downloads/",
+            "url": "https://dl.pstmn.io/download/latest/win64"
+        },
+        {
+            "filename": "project_requirements.txt",
+            "mime_type": "text/plain",
+            "size_bytes": 1024,
+            "referrer": "https://github.com/",
+            "url": "https://raw.githubusercontent.com/user/project/main/requirements.txt"
+        },
+        {
+            "filename": "k8s_cheatsheet.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 524288,
+            "referrer": "https://kubernetes.io/docs/",
+            "url": "https://kubernetes.io/docs/reference/kubectl/quick-reference/k8s_cheatsheet.pdf"
+        },
+        {
+            "filename": "wsl_update_x64.msi",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 15360000,
+            "referrer": "https://learn.microsoft.com/",
+            "url": "https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi"
+        },
+        {
+            "filename": "architecture_diagram.png",
+            "mime_type": "image/png",
+            "size_bytes": 348160,
+            "referrer": "https://github.com/",
+            "url": "https://raw.githubusercontent.com/user/project/main/docs/architecture_diagram.png"
+        }
+    ],
+    "home_user": [
+        {
+            "filename": "Spotify-Setup.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 47185920,
+            "referrer": "https://www.spotify.com/download/",
+            "url": "https://download.scdn.co/SpotifySetup.exe"
+        },
+        {
+            "filename": "vlc-3.0.20-win64.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 41943040,
+            "referrer": "https://www.videolan.org/vlc/",
+            "url": "https://get.videolan.org/vlc/3.0.20/win64/vlc-3.0.20-win64.exe"
+        },
+        {
+            "filename": "minecraft_installer.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 6291456,
+            "referrer": "https://www.minecraft.net/en-us/download",
+            "url": "https://launcher.mojang.com/download/Minecraft_launcher.exe"
+        },
+        {
+            "filename": "amazon_order_invoice.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 65536,
+            "referrer": "https://www.amazon.com/gp/your-account/order-history",
+            "url": "https://www.amazon.com/gp/css/summary/print.html?orderID=113-1234567"
+        },
+        {
+            "filename": "family_photo_album.zip",
+            "mime_type": "application/zip",
+            "size_bytes": 524288000,
+            "referrer": "https://drive.google.com/",
+            "url": "https://drive.google.com/uc?id=1aBcDeFgHiJkLmNOP&export=download"
+        },
+        {
+            "filename": "netflix_viewing_history.csv",
+            "mime_type": "text/csv",
+            "size_bytes": 20480,
+            "referrer": "https://www.netflix.com/settings",
+            "url": "https://www.netflix.com/api/shakti/mre/viewinghistory?pg=0&pgSize=100"
+        },
+        {
+            "filename": "holiday_wallpaper_pack.zip",
+            "mime_type": "application/zip",
+            "size_bytes": 104857600,
+            "referrer": "https://www.reddit.com/r/wallpapers/",
+            "url": "https://i.redd.it/wallpaper_pack_december.zip"
+        },
+        {
+            "filename": "free_ebook_productivity.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 3145728,
+            "referrer": "https://www.reddit.com/r/books/",
+            "url": "https://gutenberg.org/files/productivity_guide.pdf"
+        },
+        {
+            "filename": "discord-setup.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 73400320,
+            "referrer": "https://discord.com/download",
+            "url": "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64"
+        },
+        {
+            "filename": "steam_setup.exe",
+            "mime_type": "application/octet-stream",
+            "size_bytes": 3145728,
+            "referrer": "https://store.steampowered.com/about/",
+            "url": "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe"
+        }
+    ]
+}
