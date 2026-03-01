@@ -1,7 +1,8 @@
 # Browser History Generation — Step-by-Step Guide
 
 This document explains how the browser artifact generation pipeline works,
-from raw data files to a finished Chrome/Edge `History` SQLite database.
+from raw data files to a finished Chrome/Edge `History` SQLite database
+and a populated `Downloads/` folder.
 
 ---
 
@@ -16,8 +17,13 @@ Data files ────┘         │
                          ├─ 3. Insert URL records
                          ├─ 4. Generate day-by-day visit sessions
                          ├─ 5. Insert visit chains with timestamps
-                         ├─ 6. Populate search terms
-                         └─ 7. Audit-log the created file
+                         └─ 6. Populate search terms
+
+               ──► BrowserDownloadService.apply()
+                         │
+                         ├─ 7. Select profile-specific downloads
+                         ├─ 8. Create placeholder files in Downloads/
+                         └─ 9. Insert SQLite download records + URL chains
 ```
 
 ---
@@ -26,12 +32,9 @@ Data files ────┘         │
 
 **Module:** `utils/url_loader.py`
 
-The `UrlLoader` reads `data/wordlists/urls_by_category.json` and filters
+`UrlLoader` reads `data/wordlists/urls_by_category.json` and filters
 URLs matching the profile's `browsing.categories` list. The `general`
 category is always included. URLs are deduplicated by full URL string.
-
-Example: a `developer` profile with `categories: [stackoverflow, github, documentation]`
-will receive ~70 URLs (general + 3 dev categories).
 
 ---
 
@@ -41,17 +44,15 @@ will receive ~70 URLs (general + 3 dev categories).
 
 The Chromium History database (schema version **46**) contains these tables:
 
-| Table                    | Purpose                                       |
-|--------------------------|-----------------------------------------------|
-| `meta`                   | Schema version tracking                       |
-| `urls`                   | One row per unique URL, with visit counts      |
-| `visits`                 | One row per page load, linked to `urls.id`     |
-| `keyword_search_terms`   | Search queries linked to search-engine URLs    |
-| `segments` / `segment_usage` | Internal Chrome navigation tracking       |
-| `downloads` / `downloads_url_chains` | Download history (populated in W2) |
-
-The full `CREATE TABLE` + `CREATE INDEX` SQL is applied via
-`conn.executescript()`.
+| Table | Purpose |
+|-------|---------|
+| `meta` | Schema version tracking |
+| `urls` | One row per unique URL, with visit counts |
+| `visits` | One row per page load, linked to `urls.id` |
+| `keyword_search_terms` | Search queries linked to search-engine URLs |
+| `segments` / `segment_usage` | Internal Chrome navigation tracking |
+| `downloads` | One row per downloaded file |
+| `downloads_url_chains` | Source URLs for each download |
 
 ---
 
@@ -63,8 +64,8 @@ Each URL gets a `visit_count` based on domain popularity:
 - **High-traffic** (google, youtube, github, etc.): 10–50 visits
 - **Others**: 1–15 visits
 
-`typed_count` (how often the user typed the URL) is set to `visit_count // 3`
-for ~70% of URLs. All counts use a seeded `random.Random(42)` for reproducibility.
+`typed_count` is set to `visit_count // 3` for ~70% of URLs.
+All counts use a seeded `random.Random(42)` for reproducibility.
 
 ---
 
@@ -74,16 +75,11 @@ for ~70% of URLs. All counts use a seeded `random.Random(42)` for reproducibilit
 
 For each calendar day in the timeline (default: 90 days):
 
-1. **Activity level** depends on day type:
-   - **Active day** (in `work_hours.active_days`): `daily_avg ± 33%` visits
-   - **Inactive day** (weekend for office users): `daily_avg / 4` visits (min 2)
-
-2. **Sessions** are created (1–5 per day), each starting at a random
-   minute offset within the `work_hours` window.
-
-3. **URLs within a session** are selected using an **exponential distribution**
-   (`expovariate(0.05)`), which creates a power-law effect: URLs listed
-   earlier in the data file (popular sites) are visited more frequently.
+1. **Activity level** by day type:
+   - **Active day**: `daily_avg ± 33%` visits
+   - **Inactive day** (e.g., weekend): `daily_avg / 4` visits (min 2)
+2. **Sessions** created per day (1–5), each starting at a random minute offset within `work_hours`.
+3. **URL selection** uses `expovariate(0.05)` — power-law bias toward popular sites.
 
 ---
 
@@ -91,21 +87,13 @@ For each calendar day in the timeline (default: 90 days):
 
 **Module:** `generators/visit_generator.py` → `visit_transition()`, `visit_datetime()`
 
-Each visit record includes:
-
-| Field          | How it's set                                               |
-|----------------|------------------------------------------------------------|
-| `url`          | Foreign key to `urls.id`                                   |
-| `visit_time`   | Chrome-epoch µs timestamp (see Step 6 below)               |
-| `from_visit`   | Previous visit's ID → creates browsing session chains      |
-| `transition`   | `TYPED` (1) for session start, `LINK` (0) for follow-ups   |
-| `visit_duration`| Random 5–300 seconds (in µs)                              |
-
-**Timestamp construction** (`visit_datetime()`):
-- Base day + hour offset from `work_hours.start` + minute offset within session
-- Seconds and microseconds randomised for entropy
-- Converted to Chrome epoch via `datetime_to_chrome()`:
-  `unix_µs + 11644473600 × 10⁶`
+| Field | Value |
+|-------|-------|
+| `url` | FK to `urls.id` |
+| `visit_time` | Chrome-epoch µs: `unix_µs + 11644473600 × 10⁶` |
+| `from_visit` | Previous visit ID → session chain |
+| `transition` | `TYPED` (1) for session start, `LINK` (0) for follow-ups |
+| `visit_duration` | Random 5–300 s (in µs) |
 
 ---
 
@@ -113,18 +101,58 @@ Each visit record includes:
 
 **Module:** `generators/search_term_generator.py`
 
-Selects 20–60 search terms from `data/wordlists/search_terms.txt` and
-links each to a URL ID belonging to a search engine domain
-(Google, Bing, DuckDuckGo). The `keyword_id` is set to `2` (Chrome's
-default search provider slot).
+Selects 20–60 terms from `data/wordlists/search_terms.txt` and links
+each to a search-engine URL (Google, Bing, DuckDuckGo) with `keyword_id=2`.
 
 ---
 
-## Step 7 — Audit Logging
+## Step 7 — Download Selection
 
-Every created file (SQLite DB, JSON config, directory) is recorded via
-`AuditLogger.log()` with service name, operation type, full path, and
-browser name for post-deployment traceability.
+**Module:** `generators/download_generator.py` → `select_downloads()`
+
+Reads `data/wordlists/downloads_by_profile.json` and picks N entries
+matching the active profile (`office_user`, `developer`, `home_user`).
+Selection uses `random.Random(43)` (separate seed from visits).
+
+**Profile-specific examples:**
+
+| Profile | Example files |
+|---------|--------------|
+| `office_user` | `Q4_Financial_Report.pdf`, `Teams_installer.exe`, `budget_template.xlsx` |
+| `developer` | `Python-3.12.2-amd64.exe`, `Docker Desktop Installer.exe`, `Git-2.43.0-64-bit.exe` |
+| `home_user` | `Spotify-Setup.exe`, `discord-setup.exe`, `amazon_order_invoice.pdf` |
+
+---
+
+## Step 8 — Filesystem Stubs
+
+**Module:** `generators/download_generator.py` → `create_placeholder_file()`
+
+Zero-byte stub files are created in `Users/<username>/Downloads/` so that
+both filesystem enumeration (`dir`, `os.listdir`) and shell preview tools
+show genuine-looking download artifacts.
+
+---
+
+## Step 9 — SQLite Download Records
+
+**Module:** `generators/download_generator.py` → `insert_download()`
+
+Each download inserts into two tables:
+
+**`downloads` row:**
+| Column | Value |
+|--------|-------|
+| `guid` | Randomly generated UUID4 |
+| `target_path` | `C:\Users\<name>\Downloads\<filename>` |
+| `start_time` / `end_time` | Chrome-epoch timestamps (5–120 s apart) |
+| `received_bytes` = `total_bytes` | From catalogue (realistic sizes) |
+| `state` | `1` = COMPLETE |
+| `danger_type` | `0` = NOT_DANGEROUS |
+| `mime_type` | From catalogue (e.g., `application/pdf`) |
+| `referrer` | Realistic referring URL |
+
+**`downloads_url_chains` row:** Direct source URL at `chain_index=0`.
 
 ---
 
@@ -132,46 +160,26 @@ browser name for post-deployment traceability.
 
 ### What Malware Checks
 
-Sophisticated malware inspects browser artifacts for these evasion signals:
+| Signal | What it checks |
+|--------|---------------|
+| **History density** | `SELECT COUNT(*) FROM urls` — expects > 20–50 |
+| **Visit spread** | Timestamps spanning weeks/months |
+| **Diurnal pattern** | Activity in daytime, quiet at night |
+| **Session chains** | `from_visit > 0` links |
+| **Search terms** | Non-empty `keyword_search_terms` |
+| **Downloads** | Non-empty `downloads` table + files in Downloads/ |
+| **Wear-and-tear** | Cookies, bookmarks, downloads all co-existing |
 
-| Signal                      | What it checks                                    |
-|-----------------------------|---------------------------------------------------|
-| **History density**         | `SELECT COUNT(*) FROM urls` — expects > 20–50     |
-| **Visit spread**            | Timestamps should span weeks/months, not hours    |
-| **Diurnal pattern**         | Activity clustered in daytime, quiet at night      |
-| **Session chains**          | `from_visit > 0` links should exist               |
-| **Search terms**            | Non-empty `keyword_search_terms` table             |
-| **Wear-and-tear artifacts** | Cookies, bookmarks, downloads should co-exist      |
+### Our Timeline Approach
 
-### Existing Approaches
-
-| Technique                     | Used by                     | Our approach       |
-|-------------------------------|-----------------------------|--------------------|
-| Uniform random timestamps     | Basic sandboxes             | ❌ Easily detected  |
-| Poisson arrival model         | Academic research           | ✅ Partially used   |
-| Circadian/diurnal weighting   | Advanced sandbox hardening  | ✅ `work_hours` window |
-| Power-law inter-event times   | Human behavior modeling     | ✅ Exponential URL selection |
-| Deterministic seeded RNG      | Reproducibility requirement | ✅ `Random(42)`     |
-
-### Why Our Approach Works
-
-1. **Diurnal model**: Visits are constrained to `work_hours` (e.g., 9–17),
-   with reduced activity on non-active days. This matches the circadian
-   rhythm research showing humans browse in predictable daily cycles.
-
-2. **Power-law URL selection**: `expovariate(0.05)` creates a heavy-tailed
-   distribution — a few sites dominate visit frequency while most URLs
-   have low visit counts. This matches real browsing behaviour.
-
-3. **Session chains**: `from_visit` links create realistic navigation flows
-   (typed URL → clicked link → clicked link), which is exactly what
-   malware expects to see.
-
-4. **Entropy**: Randomised seconds/microseconds add timestamp entropy,
-   so visits don't fall on exact minute boundaries.
-
-5. **Deterministic seed**: `Random(42)` ensures the same profile always
-   produces the same history, critical for auditability and testing.
+| Method | Evidence |
+|--------|---------|
+| **Diurnal (circadian) model** | `work_hours` window; reduced weekend activity |
+| **Power-law URL selection** | `expovariate(0.05)` — few sites dominate |
+| **Session chaining** | `from_visit` links: TYPED → LINK → LINK |
+| **Entropy injection** | Random seconds/microseconds per visit |
+| **Deterministic seed** | `Random(42)` for reproducibility |
+| **Dual download artifacts** | SQLite rows + filesystem stubs |
 
 ---
 
@@ -179,14 +187,16 @@ Sophisticated malware inspects browser artifacts for these evasion signals:
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `browser_profile.py` | ~99 | Orchestrator: creates profile dirs + config JSONs |
-| `history.py` | ~146 | Orchestrator: creates History SQLite DBs |
-| `utils/chrome_timestamps.py` | ~34 | Chrome epoch ↔ datetime conversion |
-| `utils/constants.py` | ~83 | Transition codes, browser paths, search engines |
-| `utils/url_loader.py` | ~80 | Loads URLs and search terms from data files |
-| `generators/schema.py` | ~107 | Full Chromium History DB schema SQL |
+| `browser_profile.py` | ~99 | Orchestrator: profile dirs + config JSONs |
+| `history.py` | ~146 | Orchestrator: History SQLite DB |
+| `downloads.py` | ~140 | Orchestrator: download records + stubs |
+| `utils/chrome_timestamps.py` | ~34 | Chrome epoch ↔ datetime |
+| `utils/constants.py` | ~83 | Transition codes, browser paths |
+| `utils/url_loader.py` | ~80 | Loads URLs and search terms |
+| `generators/schema.py` | ~113 | Full Chromium History DB schema SQL |
 | `generators/config_generator.py` | ~120 | Local State, Preferences, Secure Preferences |
-| `generators/bookmark_enricher.py` | ~96 | Loads & stamps bookmarks with IDs/timestamps |
-| `generators/visit_generator.py` | ~116 | Day sessions, visit chains, transition logic |
+| `generators/bookmark_enricher.py` | ~96 | Loads & enriches bookmark templates |
+| `generators/visit_generator.py` | ~116 | Day sessions, visit chains, transitions |
 | `generators/search_term_generator.py` | ~53 | Search term ↔ search-engine URL linking |
-| `__init__.py` | ~6 | Package exports |
+| `generators/download_generator.py` | ~104 | Download catalogue, insertion, file stubs |
+| `__init__.py` | ~8 | Package exports |
