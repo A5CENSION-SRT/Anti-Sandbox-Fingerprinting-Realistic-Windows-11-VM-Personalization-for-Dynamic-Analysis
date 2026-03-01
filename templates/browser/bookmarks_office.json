@@ -1,0 +1,146 @@
+{
+    "checksum": "",
+    "roots": {
+        "bookmark_bar": {
+            "children": [
+                {
+                    "name": "Work",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Outlook - Microsoft 365",
+                            "type": "url",
+                            "url": "https://outlook.office365.com/"
+                        },
+                        {
+                            "name": "Microsoft Teams",
+                            "type": "url",
+                            "url": "https://teams.microsoft.com/"
+                        },
+                        {
+                            "name": "SharePoint",
+                            "type": "url",
+                            "url": "https://sharepoint.com/"
+                        },
+                        {
+                            "name": "OneDrive",
+                            "type": "url",
+                            "url": "https://onedrive.live.com/"
+                        },
+                        {
+                            "name": "Salesforce",
+                            "type": "url",
+                            "url": "https://www.salesforce.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "Productivity",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Google Docs",
+                            "type": "url",
+                            "url": "https://docs.google.com/document/"
+                        },
+                        {
+                            "name": "Google Sheets",
+                            "type": "url",
+                            "url": "https://docs.google.com/spreadsheets/"
+                        },
+                        {
+                            "name": "Notion",
+                            "type": "url",
+                            "url": "https://www.notion.so/"
+                        },
+                        {
+                            "name": "Trello",
+                            "type": "url",
+                            "url": "https://trello.com/"
+                        },
+                        {
+                            "name": "Asana",
+                            "type": "url",
+                            "url": "https://asana.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "Company",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Company Intranet",
+                            "type": "url",
+                            "url": "https://intranet.acmecorp.com/"
+                        },
+                        {
+                            "name": "HR Portal",
+                            "type": "url",
+                            "url": "https://hr.acmecorp.com/"
+                        },
+                        {
+                            "name": "IT Helpdesk",
+                            "type": "url",
+                            "url": "https://helpdesk.acmecorp.com/"
+                        },
+                        {
+                            "name": "Expense Reports",
+                            "type": "url",
+                            "url": "https://expenses.acmecorp.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "LinkedIn",
+                    "type": "url",
+                    "url": "https://www.linkedin.com/feed/"
+                },
+                {
+                    "name": "Google Calendar",
+                    "type": "url",
+                    "url": "https://calendar.google.com/"
+                }
+            ],
+            "name": "Bookmarks bar",
+            "type": "folder"
+        },
+        "other": {
+            "children": [
+                {
+                    "name": "BBC News",
+                    "type": "url",
+                    "url": "https://www.bbc.com/news"
+                },
+                {
+                    "name": "Reuters",
+                    "type": "url",
+                    "url": "https://www.reuters.com/"
+                },
+                {
+                    "name": "CNBC",
+                    "type": "url",
+                    "url": "https://www.cnbc.com/"
+                },
+                {
+                    "name": "Indeed",
+                    "type": "url",
+                    "url": "https://www.indeed.com/"
+                },
+                {
+                    "name": "Glassdoor",
+                    "type": "url",
+                    "url": "https://www.glassdoor.com/"
+                }
+            ],
+            "name": "Other bookmarks",
+            "type": "folder"
+        },
+        "synced": {
+            "children": [],
+            "name": "Mobile bookmarks",
+            "type": "folder"
+        }
+    },
+    "version": 1
+}

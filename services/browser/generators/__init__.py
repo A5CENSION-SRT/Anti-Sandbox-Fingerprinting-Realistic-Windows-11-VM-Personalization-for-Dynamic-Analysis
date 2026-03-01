@@ -1,0 +1,1 @@
+"""Browser artifact generator modules."""
