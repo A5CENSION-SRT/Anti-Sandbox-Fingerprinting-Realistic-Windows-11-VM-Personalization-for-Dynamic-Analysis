@@ -1,6 +1,33 @@
-pyyaml
-pywin32
-ruamel.yaml
-pydantic
-deepmerge
-faker
+# ---------------------------------------------------------------------------
+# Core infrastructure (Sumukha's layer — already written)
+# ---------------------------------------------------------------------------
+pyyaml>=6.0.2             # YAML parsing for config.yaml
+ruamel.yaml>=0.18.6       # Profile YAML loading with comment preservation
+pydantic>=2.0,<3.0        # v2 required — frozen models, extra=forbid, model_config
+deepmerge>=1.1.1          # Profile inheritance deep-merge
+faker>=33.0.0             # Deterministic fake identity generation
+
+# ---------------------------------------------------------------------------
+# Windows-specific (filesystem attributes + creation-time stamping)
+# ---------------------------------------------------------------------------
+pywin32>=310              # win32api/win32file for NTFS timestamps & attributes
+
+# ---------------------------------------------------------------------------
+# Registry — Snehal (W1-W2)
+# regipy: read-only offline hive parser (used for VM key detection in vm_scrubber)
+# construct: binary struct packing for MRU blobs, UserAssist FILETIME structs
+# ---------------------------------------------------------------------------
+regipy>=6.2.0             # Offline registry hive reader (RegistryHive, NKRecord)
+construct>=2.10.70        # Binary protocol builder (transitive dep of regipy, used directly)
+
+# ---------------------------------------------------------------------------
+# Event Logs — Snehal (W3)
+# python-evtx: EVTX structure reference for synthetic XML record generation
+# ---------------------------------------------------------------------------
+python-evtx>=0.8.1        # EVTX binary parsing reference + structure verification
+
+# ---------------------------------------------------------------------------
+# Testing
+# ---------------------------------------------------------------------------
+pytest>=8.0.0             # Test runner (all members)
+pytest-mock>=3.14.0       # MagicMock / mocker fixture shorthand (optional but clean)
