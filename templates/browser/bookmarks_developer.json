@@ -1,0 +1,202 @@
+{
+    "checksum": "",
+    "roots": {
+        "bookmark_bar": {
+            "children": [
+                {
+                    "name": "Dev",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "GitHub",
+                            "type": "url",
+                            "url": "https://github.com/"
+                        },
+                        {
+                            "name": "GitHub Notifications",
+                            "type": "url",
+                            "url": "https://github.com/notifications"
+                        },
+                        {
+                            "name": "GitLab",
+                            "type": "url",
+                            "url": "https://gitlab.com/"
+                        },
+                        {
+                            "name": "Docker Hub",
+                            "type": "url",
+                            "url": "https://hub.docker.com/"
+                        },
+                        {
+                            "name": "PyPI",
+                            "type": "url",
+                            "url": "https://pypi.org/"
+                        },
+                        {
+                            "name": "npm",
+                            "type": "url",
+                            "url": "https://www.npmjs.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "Docs",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Python 3 Docs",
+                            "type": "url",
+                            "url": "https://docs.python.org/3/"
+                        },
+                        {
+                            "name": "MDN Web Docs",
+                            "type": "url",
+                            "url": "https://developer.mozilla.org/en-US/"
+                        },
+                        {
+                            "name": "React",
+                            "type": "url",
+                            "url": "https://react.dev/"
+                        },
+                        {
+                            "name": "Docker Docs",
+                            "type": "url",
+                            "url": "https://docs.docker.com/"
+                        },
+                        {
+                            "name": "Kubernetes Docs",
+                            "type": "url",
+                            "url": "https://kubernetes.io/docs/"
+                        },
+                        {
+                            "name": "FastAPI",
+                            "type": "url",
+                            "url": "https://fastapi.tiangolo.com/"
+                        },
+                        {
+                            "name": "Node.js Docs",
+                            "type": "url",
+                            "url": "https://nodejs.org/docs/latest/api/"
+                        },
+                        {
+                            "name": "VS Code Docs",
+                            "type": "url",
+                            "url": "https://code.visualstudio.com/docs"
+                        }
+                    ]
+                },
+                {
+                    "name": "Community",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "Stack Overflow",
+                            "type": "url",
+                            "url": "https://stackoverflow.com/"
+                        },
+                        {
+                            "name": "Hacker News",
+                            "type": "url",
+                            "url": "https://news.ycombinator.com/"
+                        },
+                        {
+                            "name": "Dev.to",
+                            "type": "url",
+                            "url": "https://dev.to/"
+                        },
+                        {
+                            "name": "r/programming",
+                            "type": "url",
+                            "url": "https://www.reddit.com/r/programming/"
+                        }
+                    ]
+                },
+                {
+                    "name": "Cloud",
+                    "type": "folder",
+                    "children": [
+                        {
+                            "name": "AWS Console",
+                            "type": "url",
+                            "url": "https://console.aws.amazon.com/"
+                        },
+                        {
+                            "name": "Google Cloud Console",
+                            "type": "url",
+                            "url": "https://console.cloud.google.com/"
+                        },
+                        {
+                            "name": "Azure Portal",
+                            "type": "url",
+                            "url": "https://portal.azure.com/"
+                        },
+                        {
+                            "name": "Vercel",
+                            "type": "url",
+                            "url": "https://vercel.com/dashboard"
+                        },
+                        {
+                            "name": "Netlify",
+                            "type": "url",
+                            "url": "https://app.netlify.com/"
+                        }
+                    ]
+                },
+                {
+                    "name": "GitHub Copilot",
+                    "type": "url",
+                    "url": "https://github.com/features/copilot"
+                },
+                {
+                    "name": "ChatGPT",
+                    "type": "url",
+                    "url": "https://chat.openai.com/"
+                }
+            ],
+            "name": "Bookmarks bar",
+            "type": "folder"
+        },
+        "other": {
+            "children": [
+                {
+                    "name": "TechCrunch",
+                    "type": "url",
+                    "url": "https://techcrunch.com/"
+                },
+                {
+                    "name": "Ars Technica",
+                    "type": "url",
+                    "url": "https://arstechnica.com/"
+                },
+                {
+                    "name": "The Verge",
+                    "type": "url",
+                    "url": "https://www.theverge.com/"
+                },
+                {
+                    "name": "LinkedIn",
+                    "type": "url",
+                    "url": "https://www.linkedin.com/feed/"
+                },
+                {
+                    "name": "Regex101",
+                    "type": "url",
+                    "url": "https://regex101.com/"
+                },
+                {
+                    "name": "JSON Formatter",
+                    "type": "url",
+                    "url": "https://jsonformatter.curiousconcept.com/"
+                }
+            ],
+            "name": "Other bookmarks",
+            "type": "folder"
+        },
+        "synced": {
+            "children": [],
+            "name": "Mobile bookmarks",
+            "type": "folder"
+        }
+    },
+    "version": 1
+}
