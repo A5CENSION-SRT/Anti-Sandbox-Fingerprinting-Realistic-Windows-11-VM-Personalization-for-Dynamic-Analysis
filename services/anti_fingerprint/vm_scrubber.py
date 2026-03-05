@@ -59,6 +59,7 @@ from pathlib import Path
 from random import Random
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from core.identity_generator import _VM_STRINGS as _CORE_VM_STRINGS
 from services.base_service import BaseService
 from services.registry.hive_writer import (
     HiveOperation,
@@ -70,16 +71,15 @@ from services.registry.hive_writer import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# VM indicator vocabulary — mirrors core.identity_generator._VM_STRINGS
+# VM indicator vocabulary
+#
+# Authoritative base set sourced from core.identity_generator._VM_STRINGS
+# (the same strings used at detection time).  Extended here with additional
+# hypervisor-specific strings that appear in registry artifacts but are not
+# part of the identity-generator's username/hostname detection set.
 # ---------------------------------------------------------------------------
 
-_VM_STRINGS: frozenset = frozenset({
-    "vbox",
-    "vmware",
-    "virtual",
-    "test-pc",
-    "sandbox",
-    "hyperv",
+_VM_STRINGS: frozenset = _CORE_VM_STRINGS | frozenset({
     "qemu",
     "xen",
     "bochs",
