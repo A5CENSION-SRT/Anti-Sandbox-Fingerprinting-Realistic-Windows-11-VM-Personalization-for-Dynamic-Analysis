@@ -88,13 +88,13 @@ structures, browser data — that are consistent with a chosen usage profile.
 
 ### 2. Core Layer (`core/`)
 
-| Module | Role |
-|--------|------|
-| `orchestrator.py` | Wires all services; single entry point for a full run |
-| `profile_engine.py` | Loads and deep-merges profile YAML files; validates via Pydantic |
-| `identity_generator.py` | Generates deterministic `IdentityBundle` from a seed |
-| `timestamp_service.py` | Produces realistic, chronologically-sorted timestamps |
-| `audit_logger.py` | Append-only in-memory log; `entries` property returns list of dicts |
+| Module                  | Role                                                                |
+| ----------------------- | ------------------------------------------------------------------- |
+| `orchestrator.py`       | Wires all services; single entry point for a full run               |
+| `profile_engine.py`     | Loads and deep-merges profile YAML files; validates via Pydantic    |
+| `identity_generator.py` | Generates deterministic `IdentityBundle` from a seed                |
+| `timestamp_service.py`  | Produces realistic, chronologically-sorted timestamps               |
+| `audit_logger.py`       | Append-only in-memory log; `entries` property returns list of dicts |
 
 ### 3. Services Layer (`services/`)
 
@@ -110,45 +110,48 @@ plus `AuditLogger` at construction time — never inside `apply()`. This keeps
 services testable in isolation with `MagicMock(spec=HiveWriter)`.
 
 #### `services/registry/`
+
 Writes personalisation data to raw registry hives via `HiveWriter`.
 
-| Service | Key area | Notable detail |
-|---------|----------|----------------|
-| `SystemIdentity` | `HKLM\SYSTEM\ControlSet001\Control\ComputerName` | Sets hostname + ProductId |
-| `InstalledPrograms` | `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall` | Profile-specific app list |
-| `NetworkProfiles` | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList` | Unique GUID per adapter |
-| `MruRecentDocs` | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs` | 15-doc MRU by extension |
-| `UserAssist` | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\UserAssist` | ROT-13 encoded app paths |
+| Service             | Key area                                                             | Notable detail            |
+| ------------------- | -------------------------------------------------------------------- | ------------------------- |
+| `SystemIdentity`    | `HKLM\SYSTEM\ControlSet001\Control\ComputerName`                     | Sets hostname + ProductId |
+| `InstalledPrograms` | `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`           | Profile-specific app list |
+| `NetworkProfiles`   | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList`      | Unique GUID per adapter   |
+| `MruRecentDocs`     | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs` | 15-doc MRU by extension   |
+| `UserAssist`        | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\UserAssist` | ROT-13 encoded app paths  |
 
 #### `services/eventlog/`
+
 Constructs binary-valid EVTX files from scratch via `EvtxWriter`.
 
-| Service | Log file | EIDs |
-|---------|----------|------|
-| `SystemLog` | `System.evtx` | 6005, 6006, 7001, 7036 |
-| `SecurityLog` | `Security.evtx` | 4608, 4624, 4634, 4672, 4769, 4907 |
-| `ApplicationLog` | `Application.evtx` | 11707, 1000, 1001 |
-| `UpdateArtifacts` | `System.evtx` + registry | EIDs 19, 20, 43, 44 per KB |
+| Service           | Log file                 | EIDs                               |
+| ----------------- | ------------------------ | ---------------------------------- |
+| `SystemLog`       | `System.evtx`            | 6005, 6006, 7001, 7036             |
+| `SecurityLog`     | `Security.evtx`          | 4608, 4624, 4634, 4672, 4769, 4907 |
+| `ApplicationLog`  | `Application.evtx`       | 11707, 1000, 1001                  |
+| `UpdateArtifacts` | `System.evtx` + registry | EIDs 19, 20, 43, 44 per KB         |
 
 #### `services/anti_fingerprint/`
+
 Removes VM-indicator strings and writes realistic hardware identifiers.
 
-| Service | Mechanism |
-|---------|-----------|
-| `VmScrubber` | Deletes VM driver/service keys; patches VM strings in hive values |
-| `HardwareNormalizer` | Writes real-vendor BIOS/motherboard/disk/GPU strings from `data/hardware_models.json` |
-| `ProcessFaker` | Populates 37 real Windows services from `templates/registry/common_services.json`; sets profile-specific Run keys |
+| Service              | Mechanism                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `VmScrubber`         | Deletes VM driver/service keys; patches VM strings in hive values                                                 |
+| `HardwareNormalizer` | Writes real-vendor BIOS/motherboard/disk/GPU strings from `data/hardware_models.json`                             |
+| `ProcessFaker`       | Populates 37 real Windows services from `templates/registry/common_services.json`; sets profile-specific Run keys |
 
 ### 4. Data & Templates (`data/`, `templates/`)
 
-| Resource | Used by |
-|----------|---------|
-| `data/hardware_models.json` | `HardwareNormalizer`, `VmScrubber` |
-| `data/kb_updates.json` | `UpdateArtifacts` |
-| `data/wordlists/` | Filesystem, browser services |
-| `templates/registry/common_services.json` | `ProcessFaker` |
-| `templates/browser/` | Browser services |
-| `templates/documents/` | Filesystem services |
+| Resource                                  | Used by                            |
+| ----------------------------------------- | ---------------------------------- |
+| `data/hardware_models.json`               | `HardwareNormalizer`, `VmScrubber` |
+| `data/kb_updates.json`                    | `UpdateArtifacts`                  |
+| `data/wordlists/`                         | Filesystem, browser services       |
+| `templates/registry/common_services.json` | `ProcessFaker`                     |
+| `templates/browser/`                      | Browser services                   |
+| `templates/documents/`                    | Filesystem services                |
 
 ### 5. Profiles (`profiles/`)
 
@@ -183,14 +186,14 @@ definitions.
 
 ## Key Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| BaseService ABC + constructor injection | Enables full mock-based unit testing without mounting a real image |
-| Deterministic RNG seeded on `(computer_name, profile_type)` | Reproducible runs; same seed → same artefacts |
-| Frozen Pydantic models throughout | Catch config errors at load time, not mid-run |
-| Single `_VM_STRINGS` source in `identity_generator.py` | One canonical set; `VmScrubber` imports and extends it |
-| Operation-list pattern (build then execute) | Allows dry-run inspection; simplifies error recovery |
-| AuditLogger as append-only list | Zero side-effects during testing; entries queryable after run |
+| Decision                                                    | Rationale                                                          |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| BaseService ABC + constructor injection                     | Enables full mock-based unit testing without mounting a real image |
+| Deterministic RNG seeded on `(computer_name, profile_type)` | Reproducible runs; same seed → same artefacts                      |
+| Frozen Pydantic models throughout                           | Catch config errors at load time, not mid-run                      |
+| Single `_VM_STRINGS` source in `identity_generator.py`      | One canonical set; `VmScrubber` imports and extends it             |
+| Operation-list pattern (build then execute)                 | Allows dry-run inspection; simplifies error recovery               |
+| AuditLogger as append-only list                             | Zero side-effects during testing; entries queryable after run      |
 
 ---
 
