@@ -1,0 +1,337 @@
+{
+    "services": [
+        {
+            "name": "AudioEndpointBuilder",
+            "display_name": "Windows Audio Endpoint Builder",
+            "description": "Manages audio devices for the Windows Audio service.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k LocalSystemNetworkRestricted",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "BFE",
+            "display_name": "Base Filtering Engine",
+            "description": "Manages firewall and IPsec policies and starts the user-mode policy enforcement framework.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalServiceNoNetworkFirewall",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "BITS",
+            "display_name": "Background Intelligent Transfer Service",
+            "description": "Transfers files in the background using idle network bandwidth.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "start_type": 3,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "CryptSvc",
+            "display_name": "Cryptographic Services",
+            "description": "Provides three management services: Catalog Database Service, Protected Root Service, and Automatic Root Certificate Update Service.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k NetworkService",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\NetworkService"
+        },
+        {
+            "name": "DcomLaunch",
+            "display_name": "DCOM Server Process Launcher",
+            "description": "Provides launch functionality for DCOM infrastructure.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k DcomLaunch",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Dhcp",
+            "display_name": "DHCP Client",
+            "description": "Registers and updates IP addresses and DNS records for this computer.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalServiceNetworkRestricted",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "DiagTrack",
+            "display_name": "Connected User Experiences and Telemetry",
+            "description": "Enables features that support in-application and connected user experiences.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k utcsvc",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Dnscache",
+            "display_name": "DNS Client",
+            "description": "Resolves and caches Domain Name System (DNS) names for this computer.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k NetworkServiceAndNoImpersonation",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\NetworkService"
+        },
+        {
+            "name": "DPS",
+            "display_name": "Diagnostic Policy Service",
+            "description": "Enables problem detection, troubleshooting and resolution for Windows components.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNoNetwork",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "EventLog",
+            "display_name": "Windows Event Log",
+            "description": "Manages events and event logs.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "FontCache",
+            "display_name": "Windows Font Cache Service",
+            "description": "Optimizes performance of applications by caching commonly used font data.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalService",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "LanmanServer",
+            "display_name": "Server",
+            "description": "Supports file, print, and named-pipe sharing over the network for this computer.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "LanmanWorkstation",
+            "display_name": "Workstation",
+            "description": "Creates and maintains client network connections to remote servers using the SMB protocol.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\NetworkService"
+        },
+        {
+            "name": "lmhosts",
+            "display_name": "TCP/IP NetBIOS Helper",
+            "description": "Provides support for the NetBIOS over TCP/IP (NetBT) service.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k LocalServicePeerNet",
+            "start_type": 3,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "LSM",
+            "display_name": "Local Session Manager",
+            "description": "Core Windows Service that manages local user sessions.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k DcomLaunch",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "MpsSvc",
+            "display_name": "Windows Defender Firewall",
+            "description": "Windows Defender Firewall helps protect your computer by preventing unauthorized users from gaining access.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalServiceNoNetworkFirewall",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "NlaSvc",
+            "display_name": "Network Location Awareness",
+            "description": "Collects and stores configuration information for the network and notifies programs when this information is modified.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k NetworkService",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\NetworkService"
+        },
+        {
+            "name": "nsi",
+            "display_name": "Network Store Interface Service",
+            "description": "This service delivers network notifications to user-mode clients.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalService",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "PlugPlay",
+            "display_name": "Plug and Play",
+            "description": "Enables a computer to recognize and adapt to hardware changes with little or no user input.",
+            "image_path": "%SystemRoot%\\system32\\umpnpmgr.exe",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Power",
+            "display_name": "Power",
+            "description": "Manages power policy and power policy notification delivery.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k DcomLaunch",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "ProfSvc",
+            "display_name": "User Profile Service",
+            "description": "Responsible for loading and unloading user profiles.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "RpcSs",
+            "display_name": "Remote Procedure Call (RPC)",
+            "description": "Serves as the endpoint mapper and COM Service Control Manager.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k rpcss",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\NetworkService"
+        },
+        {
+            "name": "SamSs",
+            "display_name": "Security Accounts Manager",
+            "description": "Stores security information for local user accounts.",
+            "image_path": "%SystemRoot%\\system32\\lsass.exe",
+            "start_type": 2,
+            "service_type": 16,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Schedule",
+            "display_name": "Task Scheduler",
+            "description": "Enables a user to configure and schedule automated tasks on this computer.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "SENS",
+            "display_name": "System Event Notification Service",
+            "description": "Monitors system events and notifies subscribers to COM+ Event System of these events.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Spooler",
+            "display_name": "Print Spooler",
+            "description": "Loads files to memory for later printing.",
+            "image_path": "%SystemRoot%\\System32\\spoolsv.exe",
+            "start_type": 2,
+            "service_type": 16,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "SystemEventsBroker",
+            "display_name": "System Events Broker",
+            "description": "Coordinates execution of background work for WinRT application.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k DcomLaunch",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Themes",
+            "display_name": "Themes",
+            "description": "Provides user experience theme management.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "UserManager",
+            "display_name": "User Manager",
+            "description": "User Manager provides the runtime components required for multi-user interaction.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "W32Time",
+            "display_name": "Windows Time",
+            "description": "Maintains date and time synchronization on all clients and servers in the network.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalService",
+            "start_type": 3,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "WinDefend",
+            "display_name": "Microsoft Defender Antivirus Service",
+            "description": "Helps protect users from malware and other potentially unwanted software.",
+            "image_path": "%ProgramFiles%\\Windows Defender\\MsMpEng.exe",
+            "start_type": 2,
+            "service_type": 16,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "Winmgmt",
+            "display_name": "Windows Management Instrumentation",
+            "description": "Provides a common interface and object model to access management information about operating system, devices, applications and services.",
+            "image_path": "%systemroot%\\system32\\svchost.exe -k netsvcs",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "WlanSvc",
+            "display_name": "WLAN AutoConfig",
+            "description": "Provides the logic required to configure, discover, connect to, and disconnect from a wireless local area network (WLAN).",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k LocalSystemNetworkRestricted",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "WpnService",
+            "display_name": "Windows Push Notifications System Service",
+            "description": "This service runs in session 0 and hosts the notification platform and connection provider.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k WpnServiceGroup",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "wscsvc",
+            "display_name": "Security Center",
+            "description": "Monitors and reports security health settings on the computer.",
+            "image_path": "%SystemRoot%\\System32\\svchost.exe -k LocalServiceNetworkRestricted",
+            "start_type": 2,
+            "service_type": 32,
+            "object_name": "NT AUTHORITY\\LocalService"
+        },
+        {
+            "name": "WSearch",
+            "display_name": "Windows Search",
+            "description": "Provides content indexing, property caching, and search results for files, e-mail, and other content.",
+            "image_path": "%systemroot%\\system32\\SearchIndexer.exe /Embedding",
+            "start_type": 2,
+            "service_type": 16,
+            "object_name": "LocalSystem"
+        },
+        {
+            "name": "wuauserv",
+            "display_name": "Windows Update",
+            "description": "Enables the detection, download, and installation of updates for Windows and other programs.",
+            "image_path": "%SystemRoot%\\system32\\svchost.exe -k netsvcs",
+            "start_type": 3,
+            "service_type": 32,
+            "object_name": "LocalSystem"
+        }
+    ]
+}

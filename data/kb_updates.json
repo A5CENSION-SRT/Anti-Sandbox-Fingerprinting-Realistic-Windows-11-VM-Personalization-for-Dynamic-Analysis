@@ -1,0 +1,204 @@
+{
+    "updates": [
+        {
+            "kb": "KB5034441",
+            "title": "2024-01 Security Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2024-01-09",
+            "size_kb": 12890,
+            "category": "Security Updates",
+            "description": "A security issue has been identified in a Microsoft software product that could affect your system."
+        },
+        {
+            "kb": "KB5033372",
+            "title": "2023-12 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-12-12",
+            "size_kb": 349184,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5031539",
+            "title": "2023-10 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-10-10",
+            "size_kb": 331776,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5030211",
+            "title": "2023-09 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-09-12",
+            "size_kb": 329728,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5028244",
+            "title": "2023-07 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-07-11",
+            "size_kb": 318464,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5026361",
+            "title": "2023-05 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-05-09",
+            "size_kb": 310272,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5025221",
+            "title": "2023-04 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-04-11",
+            "size_kb": 306176,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5023696",
+            "title": "2023-03 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-03-14",
+            "size_kb": 303104,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5022834",
+            "title": "2023-02 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-02-14",
+            "size_kb": 298496,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5021233",
+            "title": "2022-12 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2022-12-13",
+            "size_kb": 291840,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5020030",
+            "title": "2022-11 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2022-11-08",
+            "size_kb": 288768,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5018410",
+            "title": "2022-10 Cumulative Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2022-10-11",
+            "size_kb": 284672,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5017380",
+            "title": "2022-09 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems",
+            "date": "2022-09-13",
+            "size_kb": 280576,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5015807",
+            "title": "2022-07 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems",
+            "date": "2022-07-12",
+            "size_kb": 275456,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5014699",
+            "title": "2022-06 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems",
+            "date": "2022-06-14",
+            "size_kb": 271360,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5013942",
+            "title": "2022-05 Cumulative Update for Windows 10 Version 21H2 for x64-based Systems",
+            "date": "2022-05-10",
+            "size_kb": 268288,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5012170",
+            "title": "2022-08 Security Update for Secure Boot DBX",
+            "date": "2022-08-09",
+            "size_kb": 3072,
+            "category": "Security Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5011048",
+            "title": "Servicing Stack Update for Windows 10 Version 21H2",
+            "date": "2022-03-08",
+            "size_kb": 8192,
+            "category": "Definition Updates",
+            "description": "This update makes quality improvements to the servicing stack."
+        },
+        {
+            "kb": "KB890830",
+            "title": "Windows Malicious Software Removal Tool x64 - v5.121",
+            "date": "2024-01-09",
+            "size_kb": 62464,
+            "category": "Definition Updates",
+            "description": "After the download, this tool runs one time to check your computer for infection."
+        },
+        {
+            "kb": "KB2267602",
+            "title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.403.987.0)",
+            "date": "2024-01-10",
+            "size_kb": 116736,
+            "category": "Definition Updates",
+            "description": "Install this update to revise the files that are used to detect viruses."
+        },
+        {
+            "kb": "KB5028318",
+            "title": "2023-07 Cumulative Update for .NET Framework 3.5 and 4.8.1 for Windows 10 Version 22H2",
+            "date": "2023-07-11",
+            "size_kb": 47104,
+            "category": "Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5027538",
+            "title": "2023-06 Cumulative Update for .NET Framework 3.5 and 4.8.1 for Windows 10 Version 22H2",
+            "date": "2023-06-13",
+            "size_kb": 45056,
+            "category": "Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB4023057",
+            "title": "Update for Windows 10 Version 22H2 for x64-based Systems",
+            "date": "2023-10-10",
+            "size_kb": 2048,
+            "category": "Updates",
+            "description": "This update improves reliability of the Windows update service components."
+        },
+        {
+            "kb": "KB5028948",
+            "title": "2023-08 Cumulative Update Preview for Windows 10 Version 22H2",
+            "date": "2023-08-22",
+            "size_kb": 336896,
+            "category": "Updates",
+            "description": "Install this update to resolve issues in Windows."
+        },
+        {
+            "kb": "KB5003791",
+            "title": "Feature Update to Windows 10 Version 22H2",
+            "date": "2022-10-18",
+            "size_kb": 3543040,
+            "category": "Upgrades",
+            "description": "Feature update to Windows 10, version 22H2."
+        }
+    ]
+}
