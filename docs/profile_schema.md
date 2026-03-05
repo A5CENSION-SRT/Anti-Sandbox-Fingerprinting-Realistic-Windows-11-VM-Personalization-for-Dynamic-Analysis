@@ -22,25 +22,25 @@ All profiles that omit a field inherit it from `base.yaml`.
 
 ## Full Schema
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `extends` | `str` | No | Name of parent profile (without `.yaml`) |
-| `username` | `str` | Yes | Windows username (e.g. `"alice.smith"`) |
-| `organization` | `str` | Yes | Registered organisation name |
-| `locale` | `str` | Yes | BCP-47 locale string (e.g. `"en_US"`) |
-| `installed_apps` | `list[str]` | Yes | List of application identifiers |
-| `browsing.categories` | `list[str]` | Yes | URL category buckets from `data/urls_by_category.json` |
-| `browsing.daily_avg_sites` | `int` | Yes | Average distinct sites visited per day |
-| `work_hours.start` | `int` | Yes | Start hour (24h, inclusive) |
-| `work_hours.end` | `int` | Yes | End hour (24h, exclusive) |
-| `work_hours.active_days` | `list[int]` | Yes | ISO weekday numbers (1=Mon … 7=Sun) |
+| Field                      | Type        | Required | Description                                            |
+| -------------------------- | ----------- | -------- | ------------------------------------------------------ |
+| `extends`                  | `str`       | No       | Name of parent profile (without `.yaml`)               |
+| `username`                 | `str`       | Yes      | Windows username (e.g. `"alice.smith"`)                |
+| `organization`             | `str`       | Yes      | Registered organisation name                           |
+| `locale`                   | `str`       | Yes      | BCP-47 locale string (e.g. `"en_US"`)                  |
+| `installed_apps`           | `list[str]` | Yes      | List of application identifiers                        |
+| `browsing.categories`      | `list[str]` | Yes      | URL category buckets from `data/urls_by_category.json` |
+| `browsing.daily_avg_sites` | `int`       | Yes      | Average distinct sites visited per day                 |
+| `work_hours.start`         | `int`       | Yes      | Start hour (24h, inclusive)                            |
+| `work_hours.end`           | `int`       | Yes      | End hour (24h, exclusive)                              |
+| `work_hours.active_days`   | `list[int]` | Yes      | ISO weekday numbers (1=Mon … 7=Sun)                    |
 
 ---
 
 ## Pydantic Validation
 
 Profiles are loaded through `ProfileEngine` and validated against the
-`ProfileContext` Pydantic model (`core/profile_engine.py`).  The model uses
+`ProfileContext` Pydantic model (`core/profile_engine.py`). The model uses
 `frozen=True, extra="forbid"`, so any unrecognised key raises a validation
 error at load time.
 
