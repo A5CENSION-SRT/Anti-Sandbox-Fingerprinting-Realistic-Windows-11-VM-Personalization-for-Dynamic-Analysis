@@ -1,0 +1,21 @@
+# ARC - Artifact Reality Composer Configuration
+# ==============================================
+
+# Output directory for generated artifacts
+mount_path: "./output"
+
+# Profile configuration
+profiles_dir: "profiles"
+profile_name: "home_user"
+
+# Data directory (contains hardware_models.json, wordlists, etc.)
+data_dir: "data"
+
+# Timeline configuration
+timeline_days: 90
+
+# Audit log path
+audit_log_path: "audit.log"
+
+# Error handling
+abort_on_failure: false
