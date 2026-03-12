@@ -1,0 +1,149 @@
+# Common folder names for artifact generation
+# One folder name per line - used by filesystem services
+
+# User folders
+Documents
+Downloads
+Pictures
+Videos
+Music
+Desktop
+AppData
+Favorites
+Contacts
+Links
+Saved Games
+Searches
+
+# Work folders
+Work
+Projects
+Office
+Reports
+Meetings
+Clients
+Archive
+Backup
+Shared
+Team
+Resources
+Assets
+
+# Development folders
+src
+lib
+bin
+dist
+build
+node_modules
+vendor
+packages
+tests
+docs
+config
+scripts
+tools
+utils
+helpers
+core
+api
+models
+views
+controllers
+services
+components
+modules
+plugins
+extensions
+
+# Project folders
+frontend
+backend
+server
+client
+mobile
+web
+app
+common
+shared
+public
+private
+internal
+external
+
+# Media folders
+Photos
+Images
+Screenshots
+Wallpapers
+Camera Roll
+Saved Pictures
+Video Projects
+Music Library
+Playlists
+Podcasts
+Audiobooks
+
+# Personal folders
+Personal
+Family
+Vacation
+Travel
+Recipes
+Hobbies
+Finance
+Health
+Education
+Learning
+Courses
+
+# Organization folders
+2023
+2024
+Archive
+Old
+New
+Current
+Active
+Completed
+Draft
+Final
+Review
+Approved
+Pending
+
+# System folders
+Temp
+Cache
+Logs
+Backup
+Recovery
+System
+Windows
+Program Files
+ProgramData
+
+# Application folders
+Microsoft
+Google
+Adobe
+Mozilla
+Spotify
+Discord
+Steam
+Epic Games
+Visual Studio Code
+JetBrains
+Notepad++
+
+# Configuration folders
+.config
+.cache
+.local
+.vscode
+.idea
+.git
+__pycache__
+.next
+.nuxt
+.angular
