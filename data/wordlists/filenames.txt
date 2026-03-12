@@ -1,0 +1,106 @@
+# Common filenames for artifact generation
+# One filename per line - used by filesystem services
+
+# Documents
+README.md
+CHANGELOG.md
+LICENSE.txt
+notes.txt
+meeting_notes.txt
+todo.txt
+draft.docx
+report.docx
+presentation.pptx
+budget.xlsx
+data.csv
+invoice.pdf
+contract.pdf
+proposal.docx
+summary.txt
+
+# Configuration files
+config.yaml
+config.json
+settings.json
+.env
+.gitignore
+.editorconfig
+Makefile
+Dockerfile
+docker-compose.yml
+requirements.txt
+package.json
+tsconfig.json
+pyproject.toml
+
+# Code files
+main.py
+app.py
+index.js
+index.ts
+index.html
+styles.css
+app.css
+script.js
+utils.py
+helpers.py
+test.py
+setup.py
+
+# Images
+photo.jpg
+image.png
+screenshot.png
+logo.png
+banner.jpg
+profile.jpg
+avatar.png
+background.jpg
+icon.png
+thumbnail.jpg
+
+# Media
+video.mp4
+recording.mp4
+audio.mp3
+music.mp3
+podcast.mp3
+clip.mp4
+
+# Archives
+backup.zip
+archive.tar.gz
+data.zip
+files.rar
+export.zip
+
+# Database
+database.db
+data.sqlite
+cache.db
+storage.db
+
+# Logs
+app.log
+error.log
+debug.log
+access.log
+system.log
+
+# Temporary
+temp.txt
+tmp.dat
+cache.tmp
+download.tmp
+
+# Office
+Document1.docx
+Workbook1.xlsx
+Presentation1.pptx
+Spreadsheet.xlsx
+Letter.docx
+Invoice_2024.xlsx
+Report_Q4.docx
+Budget_2024.xlsx
+Meeting_Agenda.docx
+Project_Plan.xlsx
