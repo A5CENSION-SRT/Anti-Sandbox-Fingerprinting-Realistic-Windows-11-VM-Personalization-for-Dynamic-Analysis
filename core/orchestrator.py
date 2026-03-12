@@ -187,27 +187,52 @@ class Orchestrator:
         """
         try:
             # Initialize mount manager
-            mount_path = self._config.get("mount_path", "./output")
-            self._mount_manager = MountManager(Path(mount_path))
+            mount_path = Path(self._config.get("mount_path", "./output"))
+            mount_path.mkdir(parents=True, exist_ok=True)
+            self._mount_manager = MountManager(str(mount_path))
 
-            if not self._dry_run:
-                self._mount_manager.mount()
+            # Load profile engine and profile context
+            profiles_dir = Path(self._config.get("profiles_dir", "profiles"))
+            self._profile_engine = ProfileEngine(profiles_dir)
+
+            profile_name = self._config.get("profile_name", "base")
+            profile_context = self._profile_engine.load_profile(profile_name)
 
             # Generate identity
-            self._identity_generator = IdentityGenerator()
-            identity = self._identity_generator.generate(self._config)
+            data_dir = Path(self._config.get("data_dir", "data"))
+            self._identity_generator = IdentityGenerator(profile_context, data_dir)
+            identity_bundle = self._identity_generator.generate()
 
-            # Initialize timestamp service
+            # Initialize timestamp service with seed from identity
+            username = identity_bundle.user.username
+            computer_name = identity_bundle.user.computer_name
+            seed = f"{username}-{computer_name}"
+
             self._timestamp_service = TimestampService(
-                username=identity.get("username", "default_user"),
-                computer_name=identity.get("computer_name", "DESKTOP-DEFAULT"),
+                seed=seed,
                 timeline_days=self._config.get("timeline_days", 90),
+                work_hours={
+                    "start": profile_context.work_hours.start,
+                    "end": profile_context.work_hours.end,
+                    "active_days": list(profile_context.work_hours.active_days),
+                },
             )
 
-            # Load profile engine
-            profile_path = self._config.get("profile_path", "profiles/base.yaml")
-            self._profile_engine = ProfileEngine()
-            profile = self._profile_engine.load(profile_path)
+            # Build execution context
+            profile = {
+                "username": profile_context.username,
+                "organization": profile_context.organization,
+                "locale": profile_context.locale,
+                "profile_type": profile_name,
+                "installed_apps": list(profile_context.installed_apps),
+            }
+            identity = {
+                "username": identity_bundle.user.username,
+                "full_name": identity_bundle.user.full_name,
+                "email": identity_bundle.user.email,
+                "computer_name": identity_bundle.user.computer_name,
+                "organization": identity_bundle.user.organization,
+            }
 
             # Build execution context
             self._context = {

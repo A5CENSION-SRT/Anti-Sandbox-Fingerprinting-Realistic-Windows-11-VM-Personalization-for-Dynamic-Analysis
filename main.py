@@ -159,10 +159,10 @@ def merge_cli_args(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     merged = config.copy()
 
     if args.output:
-        merged["mount_path"] = args.output
+        merged["mount_path"] = str(args.output)
 
     if args.profile:
-        merged["profile_path"] = f"profiles/{args.profile}.yaml"
+        merged["profile_name"] = args.profile
 
     if args.timeline_days:
         merged["timeline_days"] = args.timeline_days
