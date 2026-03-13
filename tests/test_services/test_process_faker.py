@@ -75,7 +75,7 @@ def templates_dir(tmp_path):
     (d / "common_services.json").write_text(
         json.dumps(_SAMPLE_SERVICES), encoding="utf-8"
     )
-    return d
+    return tmp_path / "templates"
 
 
 @pytest.fixture

@@ -71,7 +71,7 @@ _USER_RUN_KEY: str = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # Template file
 # ---------------------------------------------------------------------------
 
-_SERVICES_TEMPLATE_FILE: str = "common_services.json"
+_SERVICES_TEMPLATE_FILE: str = "registry/common_services.json"
 
 # ---------------------------------------------------------------------------
 # Profile-specific HKLM Run entries

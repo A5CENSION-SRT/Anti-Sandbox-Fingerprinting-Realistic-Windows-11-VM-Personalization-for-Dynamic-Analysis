@@ -58,31 +58,32 @@ _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     "RecycleBinService": ExecutionPhase.FILESYSTEM,
     # Phase 3: Registry
     "HiveWriter": ExecutionPhase.REGISTRY,
-    "InstalledProgramsService": ExecutionPhase.REGISTRY,
-    "MRURecentDocsService": ExecutionPhase.REGISTRY,
-    "NetworkProfilesService": ExecutionPhase.REGISTRY,
-    "SystemIdentityService": ExecutionPhase.REGISTRY,
-    "UserAssistService": ExecutionPhase.REGISTRY,
+    "InstalledPrograms": ExecutionPhase.REGISTRY,
+    "MruRecentDocs": ExecutionPhase.REGISTRY,
+    "NetworkProfiles": ExecutionPhase.REGISTRY,
+    "SystemIdentity": ExecutionPhase.REGISTRY,
+    "UserAssist": ExecutionPhase.REGISTRY,
     # Phase 4: Browser
     "BrowserProfileService": ExecutionPhase.BROWSER,
     "BookmarksService": ExecutionPhase.BROWSER,
-    "HistoryService": ExecutionPhase.BROWSER,
+    "BrowserHistoryService": ExecutionPhase.BROWSER,
     "CookiesCacheService": ExecutionPhase.BROWSER,
-    "DownloadsService": ExecutionPhase.BROWSER,
+    "BrowserDownloadService": ExecutionPhase.BROWSER,
     # Phase 5: Applications
-    "DevEnvironmentService": ExecutionPhase.APPLICATIONS,
-    "OfficeArtifactsService": ExecutionPhase.APPLICATIONS,
-    "EmailClientService": ExecutionPhase.APPLICATIONS,
-    "CommsAppsService": ExecutionPhase.APPLICATIONS,
+    "DevEnvironment": ExecutionPhase.APPLICATIONS,
+    "OfficeArtifacts": ExecutionPhase.APPLICATIONS,
+    "EmailClient": ExecutionPhase.APPLICATIONS,
+    "CommsApps": ExecutionPhase.APPLICATIONS,
     # Phase 6: Event logs
-    "ApplicationLogService": ExecutionPhase.EVENTLOG,
-    "SecurityLogService": ExecutionPhase.EVENTLOG,
-    "SystemLogService": ExecutionPhase.EVENTLOG,
-    "UpdateArtifactsService": ExecutionPhase.EVENTLOG,
+    "EvtxWriter": ExecutionPhase.EVENTLOG,
+    "ApplicationLog": ExecutionPhase.EVENTLOG,
+    "SecurityLog": ExecutionPhase.EVENTLOG,
+    "SystemLog": ExecutionPhase.EVENTLOG,
+    "UpdateArtifacts": ExecutionPhase.EVENTLOG,
     # Phase 7: Anti-fingerprint
     "HardwareNormalizer": ExecutionPhase.ANTI_FINGERPRINT,
     "ProcessFaker": ExecutionPhase.ANTI_FINGERPRINT,
-    "VMScrubber": ExecutionPhase.ANTI_FINGERPRINT,
+    "VmScrubber": ExecutionPhase.ANTI_FINGERPRINT,
 }
 
 
@@ -201,7 +202,10 @@ class Orchestrator:
             # Generate identity
             data_dir = Path(self._config.get("data_dir", "data"))
             self._identity_generator = IdentityGenerator(profile_context, data_dir)
-            identity_bundle = self._identity_generator.generate()
+            identity_bundle = self._identity_generator.generate(
+                override_username=self._config.get("override_username"),
+                override_hostname=self._config.get("override_hostname"),
+            )
 
             # Initialize timestamp service with seed from identity
             username = identity_bundle.user.username
@@ -273,14 +277,45 @@ class Orchestrator:
             ServiceRegistrationError: If registration fails.
         """
         try:
-            # Instantiate service with dependencies
-            instance = service_class(
-                self._mount_manager,
-                self._timestamp_service,
-                self._audit,
-            )
+            import inspect
 
-            service_name = instance.service_name
+            # Setup available dependencies for dependency injection
+            available_deps = {
+                "mount_manager": self._mount_manager,
+                "timestamp_service": self._timestamp_service,
+                "audit_logger": self._audit,
+                "data_dir": Path(self._config.get("data_dir", "data")),
+                "templates_dir": Path(self._config.get("templates_dir", "templates")),
+                "profile_config": self._context,  # passing context in case they ask for profile_config
+                "username": self._context.get("username", "default_user"),
+            }
+
+            # Map already registered services by class name in case another service depends on them
+            for name, (cls, inst) in self._services.items():
+                # lower_snake_case of class name as key (e.g., 'HiveWriter' -> 'hive_writer')
+                import re
+                key = re.sub(r'(?<!^)(?=[A-Z])', '_', cls.__name__).lower()
+                available_deps[key] = inst
+
+            sig = inspect.signature(service_class.__init__)
+            kwargs = {}
+            for param_name, param in sig.parameters.items():
+                if param_name == "self":
+                    continue
+                if param_name in available_deps:
+                    kwargs[param_name] = available_deps[param_name]
+                else:
+                    # Provide None if it's optional, else fallback to something or let it fail
+                    if param.default is not inspect.Parameter.empty:
+                        kwargs[param_name] = param.default
+                    else:
+                        logger.warning("Unsatisfied dependency '%s' for %s", param_name, service_class.__name__)
+                        kwargs[param_name] = None
+
+            # Instantiate service with dynamic kwargs
+            instance = service_class(**kwargs)
+
+            service_name = getattr(instance, "service_name", service_class.__name__)
             self._services[service_name] = (service_class, instance)
 
             logger.debug("Registered service: %s", service_name)
@@ -306,8 +341,11 @@ class Orchestrator:
 
         return sorted(self._services.keys(), key=get_phase)
 
-    def run(self) -> OrchestrationResult:
+    def run(self, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> OrchestrationResult:
         """Execute all registered services in order.
+
+        Args:
+            progress_callback: Optional callback receiving (current_index, total_services, current_service_name).
 
         Returns:
             OrchestrationResult with execution details.
@@ -334,7 +372,11 @@ class Orchestrator:
             len(self._service_order), self._dry_run,
         )
 
-        for service_name in self._service_order:
+        total_services = len(self._service_order)
+        for i, service_name in enumerate(self._service_order):
+            if progress_callback:
+                progress_callback(i, total_services, service_name)
+
             service_start = time.perf_counter()
             _, instance = self._services[service_name]
 
@@ -345,14 +387,14 @@ class Orchestrator:
 
             try:
                 if self._dry_run:
-                    logger.info("[DRY RUN] Would execute: %s", service_name)
+                    logger.debug("[DRY RUN] Would execute: %s", service_name)
                 else:
                     instance.apply(self._context)
 
                 service_result.success = True
                 result.services_executed += 1
 
-                logger.info("Executed service: %s", service_name)
+                logger.debug("Executed service: %s", service_name)
 
             except Exception as exc:
                 service_result.error = str(exc)
@@ -372,6 +414,9 @@ class Orchestrator:
                     time.perf_counter() - service_start
                 ) * 1000
                 result.results.append(service_result)
+
+        if progress_callback:
+            progress_callback(total_services, total_services, "Complete")
 
         result.total_duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -396,7 +441,8 @@ class Orchestrator:
         """Clean up resources after orchestration."""
         if self._mount_manager and not self._dry_run:
             try:
-                self._mount_manager.unmount()
+                if hasattr(self._mount_manager, 'unmount'):
+                    self._mount_manager.unmount()
             except Exception as exc:
                 logger.warning("Failed to unmount: %s", exc)
 

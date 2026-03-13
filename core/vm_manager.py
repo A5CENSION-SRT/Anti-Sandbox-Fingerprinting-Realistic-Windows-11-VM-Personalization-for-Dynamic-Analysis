@@ -1,4 +1,4 @@
-"""Hyper-V VM and VHDX volume management for offline artifact injection."""
+"""Offline VHDX volume management for artifact injection (Windows 11 Home Compatible)."""
 
 import logging
 import subprocess
@@ -10,20 +10,22 @@ logger = logging.getLogger(__name__)
 
 
 class VMManagerError(Exception):
-    """Raised for errors in VM/VHDX operations."""
+    """Raised for errors in VHDX offline operations."""
     pass
 
 
 class VMManager:
-    """Manages offline volume mounting for Hyper-V Windows VMs.
+    """Manages offline volume mounting for Windows VHD/VHDX files.
     
-    This allows ARC to write artifacts directly to the dormant Windows partition.
+    Uses standard Windows storage cmdlets (Mount-DiskImage) available
+    on all editions of Windows, including Home, to mount offline disks
+    and inject artifacts into the dormant Windows partition.
     """
 
     def __init__(self, vhdx_path: str):
         self.vhdx_path = Path(vhdx_path).resolve()
         if not self.vhdx_path.exists():
-            raise FileNotFoundError(f"VHDX file not found: {self.vhdx_path}")
+            raise FileNotFoundError(f"Disk image not found: {self.vhdx_path}")
             
         # The drive letter assigned to the Windows partition after mounting
         self.mounted_drive: Optional[str] = None
@@ -42,30 +44,9 @@ class VMManager:
             logger.error(f"PowerShell command failed: {e.stderr.strip()}")
             raise VMManagerError(f"PowerShell error: {e.stderr.strip()}") from e
 
-    def get_vm_state(self, vm_name: str) -> str:
-        """Get the current state of a Hyper-V VM."""
-        cmd = f"(Get-VM -Name '{vm_name}').State"
-        return self._run_powershell(cmd)
-
     def stop_vm(self, vm_name: str, force: bool = False) -> None:
-        """Ensure the VM is powered down before mounting its disk."""
-        state = self.get_vm_state(vm_name)
-        if state == "Off":
-            logger.info("VM %s is already off.", vm_name)
-            return
-
-        logger.info("Stopping VM %s...", vm_name)
-        turn_off_arg = "-TurnOff" if force else ""
-        self._run_powershell(f"Stop-VM -Name '{vm_name}' {turn_off_arg}")
-        
-        # Wait until confirmed off
-        for _ in range(15):
-            if self.get_vm_state(vm_name) == "Off":
-                logger.info("VM %s successfully stopped.", vm_name)
-                return
-            time.sleep(2)
-            
-        raise VMManagerError(f"Timed out waiting for VM {vm_name} to stop.")
+        """Not supported on Windows Home (Hyper-V API required)."""
+        logger.warning("VM Start/Stop automation requires Hyper-V. Ensure your VM is powered off manually.")
 
     def mount_vhdx(self) -> str:
         """Mount the VHDX and discover the Windows partition drive letter.
@@ -76,17 +57,18 @@ class VMManager:
         if self.mounted_drive:
             return self.mounted_drive
             
-        logger.info("Mounting VHDX: %s", self.vhdx_path)
+        logger.info("Mounting disk image: %s", self.vhdx_path)
         
-        # Mount the disk image and wait for volume initialization
-        self._run_powershell(f"Mount-VHD -Path '{self.vhdx_path}'")
+        # Mount the disk image using generic Windows cmdlets (works on Home edition)
+        self._run_powershell(f"Mount-DiskImage -ImagePath '{self.vhdx_path}' -NoDriveLetter:$false")
         time.sleep(3)  # Give Windows a moment to assign drive letters
         
-        # Find the OS partition (usually the largest NTFS partition, typically C: inside the VM, 
-        # but gets a new letter on the host. We look for the one with the 'Windows' directory.)
+        # Find the OS partition by looking for the Windows directory on newly attached volumes associated with this image
         script = f"""
-        $disk = Get-VHD -Path '{self.vhdx_path}'
-        $volumes = Get-Partition -DiskNumber $disk.DiskNumber | Get-Volume
+        $image = Get-DiskImage -ImagePath '{self.vhdx_path}'
+        if (-not $image) {{ exit }}
+        
+        $volumes = $image | Get-Disk | Get-Partition | Get-Volume
         
         foreach ($vol in $volumes) {{
             if ($vol.DriveLetter) {{
@@ -112,18 +94,16 @@ class VMManager:
 
     def dismount_vhdx(self) -> None:
         """Dismount the VHDX file safely."""
-        logger.info("Dismounting VHDX: %s", self.vhdx_path)
+        logger.info("Dismounting disk image: %s", self.vhdx_path)
         try:
-            self._run_powershell(f"Dismount-VHD -Path '{self.vhdx_path}'")
+            self._run_powershell(f"Dismount-DiskImage -ImagePath '{self.vhdx_path}'")
             self.mounted_drive = None
-            logger.info("Successfully dismounted VHDX.")
+            logger.info("Successfully dismounted image.")
         except VMManagerError as e:
             logger.warning("Error during dismount: %s", e)
 
     def start_vm(self, vm_name: str) -> None:
-        """Boot the Hyper-V VM."""
+        """Not supported on Windows Home (Hyper-V API required)."""
         if self.mounted_drive:
             self.dismount_vhdx()
-            
-        logger.info("Starting VM %s...", vm_name)
-        self._run_powershell(f"Start-VM -Name '{vm_name}'")
+        logger.warning("VM Start automation requires Hyper-V. You can boot your VM manually now.")

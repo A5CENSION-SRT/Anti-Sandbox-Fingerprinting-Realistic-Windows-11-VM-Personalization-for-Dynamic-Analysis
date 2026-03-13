@@ -61,35 +61,36 @@ _SERVICE_MODULES = {
     ],
     "registry": [
         ("services.registry.hive_writer", "HiveWriter"),
-        ("services.registry.installed_programs", "InstalledProgramsService"),
-        ("services.registry.mru_recentdocs", "MRURecentDocsService"),
-        ("services.registry.network_profiles", "NetworkProfilesService"),
-        ("services.registry.system_identity", "SystemIdentityService"),
-        ("services.registry.userassist", "UserAssistService"),
+        ("services.registry.installed_programs", "InstalledPrograms"),
+        ("services.registry.mru_recentdocs", "MruRecentDocs"),
+        ("services.registry.network_profiles", "NetworkProfiles"),
+        ("services.registry.system_identity", "SystemIdentity"),
+        ("services.registry.userassist", "UserAssist"),
     ],
     "browser": [
         ("services.browser.browser_profile", "BrowserProfileService"),
         ("services.browser.bookmarks", "BookmarksService"),
-        ("services.browser.history", "HistoryService"),
+        ("services.browser.history", "BrowserHistoryService"),
         ("services.browser.cookies_cache", "CookiesCacheService"),
-        ("services.browser.downloads", "DownloadsService"),
+        ("services.browser.downloads", "BrowserDownloadService"),
     ],
     "applications": [
-        ("services.applications.dev_environment", "DevEnvironmentService"),
-        ("services.applications.office_artifacts", "OfficeArtifactsService"),
-        ("services.applications.email_client", "EmailClientService"),
-        ("services.applications.comms_apps", "CommsAppsService"),
+        ("services.applications.dev_environment", "DevEnvironment"),
+        ("services.applications.office_artifacts", "OfficeArtifacts"),
+        ("services.applications.email_client", "EmailClient"),
+        ("services.applications.comms_apps", "CommsApps"),
     ],
     "eventlog": [
-        ("services.eventlog.application_log", "ApplicationLogService"),
-        ("services.eventlog.security_log", "SecurityLogService"),
-        ("services.eventlog.system_log", "SystemLogService"),
-        ("services.eventlog.update_artifacts", "UpdateArtifactsService"),
+        ("services.eventlog.evtx_writer", "EvtxWriter"),
+        ("services.eventlog.application_log", "ApplicationLog"),
+        ("services.eventlog.security_log", "SecurityLog"),
+        ("services.eventlog.system_log", "SystemLog"),
+        ("services.eventlog.update_artifacts", "UpdateArtifacts"),
     ],
     "anti_fingerprint": [
         ("services.anti_fingerprint.hardware_normalizer", "HardwareNormalizer"),
         ("services.anti_fingerprint.process_faker", "ProcessFaker"),
-        ("services.anti_fingerprint.vm_scrubber", "VMScrubber"),
+        ("services.anti_fingerprint.vm_scrubber", "VmScrubber"),
     ],
 }
 
@@ -168,6 +169,12 @@ def merge_cli_args(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     if args.timeline_days:
         merged["timeline_days"] = args.timeline_days
 
+    if args.override_username:
+        merged["override_username"] = args.override_username
+
+    if args.override_hostname:
+        merged["override_hostname"] = args.override_hostname
+
     return merged
 
 
@@ -231,11 +238,7 @@ def register_services(
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments.
-
-    Returns:
-        Parsed arguments namespace.
-    """
+    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         prog="arc",
         description="ARC - Artifact Reality Composer",
@@ -269,6 +272,20 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Number of days of artifact history to generate (default: 90)",
+    )
+
+    parser.add_argument(
+        "--override-username",
+        type=str,
+        default=None,
+        help="Force a specific Windows username (CRITICAL for matching existing VM users)",
+    )
+
+    parser.add_argument(
+        "--override-hostname",
+        type=str,
+        default=None,
+        help="Force a specific Windows computer name",
     )
 
     parser.add_argument(
@@ -316,6 +333,102 @@ def parse_args() -> argparse.Namespace:
 
 
 # ---------------------------------------------------------------------------
+# Interactive Wizard
+# ---------------------------------------------------------------------------
+
+def run_interactive_wizard(args: argparse.Namespace) -> argparse.Namespace:
+    """Run an interactive console wizard to configure ARC."""
+    print("=" * 60)
+    print(" ARC - Artifact Reality Composer (Interactive Setup)")
+    print("=" * 60)
+    
+    # 1. Profile
+    print("\n[1/5] Select an Artifact Profile:")
+    profiles = ["developer", "office_user", "home_user", "base"]
+    for i, p in enumerate(profiles, 1):
+        print(f"  {i}. {p}")
+    while True:
+        choice = input("Select profile (1-4) [1]: ").strip() or "1"
+        if choice in ("1", "2", "3", "4"):
+            args.profile = profiles[int(choice) - 1]
+            break
+        print("Invalid choice.")
+
+    # 2. Target Mode
+    print("\n[2/5] Select Target Environment:")
+    print("  1. Infect a Dormant Windows VM (VHD/VHDX)")
+    print("  2. Generate locally to a test folder")
+    while True:
+        choice = input("Select target (1-2) [1]: ").strip() or "1"
+        if choice in ("1", "2"):
+            is_vm = (choice == "1")
+            break
+        print("Invalid choice.")
+
+    # 3. Path & Overrides
+    if is_vm:
+        print("\n[3/5] VM Details:")
+        while True:
+            vhdx = input("  Path to VHD/VHDX image file: ").strip()
+            if vhdx and Path(vhdx).exists():
+                args.vhdx_path = Path(vhdx)
+                break
+            print("  Error: File does not exist. Please enter a valid path.")
+        
+        print("\n  CRITICAL: To ensure the VM recognizes the artifacts,")
+        print("  you must provide the EXACT existing Windows username.")
+        while True:
+            uname = input("  Target VM Username: ").strip()
+            if uname:
+                args.override_username = uname
+                break
+            print("  Username is required for VM injection.")
+            
+        hname = input("  Target VM Computer Name (optional, ENTER to randomize): ").strip()
+        if hname:
+            args.override_hostname = hname
+    else:
+        print("\n[3/5] Local Output:")
+        out = input("  Output directory path [./output]: ").strip() or "./output"
+        args.output = Path(out)
+        
+        print("\n(Optional) Override Identifiers - press ENTER to use random generator.")
+        uname = input("  Force Username: ").strip()
+        if uname: args.override_username = uname
+
+    # 4. Timeline
+    print("\n[4/6] Timeline:")
+    while True:
+        days = input("  Days of history to generate [90]: ").strip() or "90"
+        if days.isdigit() and int(days) > 0:
+            args.timeline_days = int(days)
+            break
+        print("Please enter a valid positive number.")
+
+    # 5. Logging
+    print("\n[5/6] Logging:")
+    verbose_choice = input("  Enable verbose (debugging) logging? (y/N): ").strip().lower()
+    if verbose_choice == 'y':
+        args.verbose = True
+
+    print("\n[6/6] Setup Complete!")
+    print("=" * 60)
+    print(f" Profile :   {args.profile}")
+    print(f" Target  :   {'VM Image (' + str(args.vhdx_path) + ')' if is_vm else 'Local (' + str(args.output) + ')'}")
+    print(f" Username:   {args.override_username or '<Randomly Generated>'}")
+    print(f" Timeline:   {args.timeline_days} days")
+    print(f" Logging :   {'Verbose' if getattr(args, 'verbose', False) else 'Standard'}")
+    print("=" * 60)
+    
+    confirm = input("\nProceed with generation? (Y/n): ").strip().lower()
+    if confirm == 'n':
+        print("Aborted.")
+        sys.exit(0)
+
+    return args
+
+
+# ---------------------------------------------------------------------------
 # Main Entry Point
 # ---------------------------------------------------------------------------
 
@@ -326,6 +439,11 @@ def main() -> int:
         Exit code (0 for success, non-zero for failure).
     """
     args = parse_args()
+    
+    # If no arguments provided at all (other than script name), run the wizard
+    if len(sys.argv) == 1:
+        args = run_interactive_wizard(args)
+        
     setup_logging(verbose=args.verbose)
 
     logger = logging.getLogger(__name__)
@@ -377,7 +495,22 @@ def main() -> int:
             return 0
 
         # Execute orchestration
-        result = orchestrator.run()
+        def make_progress_callback():
+            def callback(current_index: int, total_services: int, service_name: str):
+                if total_services == 0:
+                    return
+                percentage = int(current_index / total_services * 100)
+                bar_length = 30
+                filled_length = int(bar_length * current_index // total_services)
+                bar = '=' * filled_length + '-' * (bar_length - filled_length)
+                sys.stdout.write(f"\r[{bar}] {percentage}% | {service_name.ljust(30)}")
+                sys.stdout.flush()
+                if current_index == total_services:
+                    sys.stdout.write("\n")
+            return callback
+
+        print("\nStarting generation...")
+        result = orchestrator.run(progress_callback=make_progress_callback())
         
         # Power up if everything succeeded and VM was provided
         if result.success and vm_manager and args.vm_name:
@@ -385,22 +518,33 @@ def main() -> int:
             vm_manager.start_vm(args.vm_name)
 
         # Report results
+        print("\n" + "=" * 60)
+        print(" GENERATION SUMMARY")
+        print("=" * 60)
+        
+        for svc_result in result.results:
+            status = "PASS" if svc_result.success else "FAIL"
+            time_str = f"{svc_result.duration_ms:.1f}ms"
+            print(f"[{status}] {svc_result.service_name[:25].ljust(25)} | {time_str:>10}")
+            if not svc_result.success and svc_result.error:
+                print(f"       -> ERROR: {svc_result.error}")
+                print(f"       -> TRACE: Check arc.log for full details.")
+
+        print("=" * 60)
+
         if result.success:
             logger.info(
                 "SUCCESS: Generated artifacts in %.2f seconds",
                 result.total_duration_ms / 1000,
             )
-            logger.info(
-                "  Services executed: %d/%d",
-                result.services_executed,
-                result.services_executed + result.services_failed,
-            )
+            print(f"\nSUCCESS: All {result.services_executed} services completed in {result.total_duration_ms / 1000:.2f} seconds.")
             return 0
         else:
             logger.error(
                 "FAILED: %d services failed",
                 result.services_failed,
             )
+            print(f"\nFAILED: {result.services_failed} out of {result.services_executed + result.services_failed} services failed.")
             for svc_result in result.results:
                 if not svc_result.success:
                     logger.error("  - %s: %s", svc_result.service_name, svc_result.error)
