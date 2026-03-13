@@ -82,6 +82,7 @@ class BrowserHistoryService(BaseService):
             rng = random.Random(42)
             url_id_map = self._insert_urls(conn, entries, rng)
             self._insert_visits(conn, entries, url_id_map, cfg, days, rng)
+            self._backfill_last_visit_times(conn, days, rng)
             populate_search_terms(
                 conn, url_id_map, self._loader.load_search_terms(), rng)
             conn.commit()
@@ -145,3 +146,27 @@ class BrowserHistoryService(BaseService):
                 conn.execute(
                     "UPDATE urls SET last_visit_time=? WHERE id=?",
                     (lt, uid))
+
+    def _backfill_last_visit_times(self, conn, days: int, rng) -> None:
+        """Assign a Chrome-epoch last_visit_time to any URL that has
+        visit_count > 0 but was never visited in the generated sessions.
+
+        This prevents coherence gaps where the visit count claims visits
+        happened but the timestamp says otherwise.
+        """
+        orphans = conn.execute(
+            "SELECT id FROM urls WHERE visit_count > 0 AND last_visit_time = 0"
+        ).fetchall()
+        if not orphans:
+            return
+
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=days)
+        for (uid,) in orphans:
+            # Pick a random moment inside the timeline window
+            offset_seconds = rng.randint(0, max(1, days * 86400))
+            synthetic_dt = start + timedelta(seconds=offset_seconds)
+            cts = datetime_to_chrome(synthetic_dt)
+            conn.execute(
+                "UPDATE urls SET last_visit_time=? WHERE id=?",
+                (cts, uid))

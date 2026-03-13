@@ -128,8 +128,12 @@ class IdentityGenerator:
 
     # -- public API ---------------------------------------------------------
 
-    def generate(self) -> IdentityBundle:
+    def generate(self, override_username: str = None, override_hostname: str = None) -> IdentityBundle:
         """Generate a complete, deterministic identity bundle.
+
+        Args:
+            override_username: Hardcode the Windows username (vital for VM sync).
+            override_hostname: Hardcode the Windows computer name.
 
         Returns:
             An immutable :class:`IdentityBundle` with user and hardware data.
@@ -139,6 +143,16 @@ class IdentityGenerator:
         """
         self._init_faker()
         user = self._generate_user_identity()
+        
+        # Apply strict overrides if provided (crucial for aligning with existing VMs)
+        if override_username or override_hostname:
+            user_update = {}
+            if override_username:
+                user_update["username"] = override_username
+            if override_hostname:
+                user_update["computer_name"] = override_hostname
+            user = user.model_copy(update=user_update)
+
         hardware = self._generate_hardware_identity()
         bundle = IdentityBundle(user=user, hardware=hardware)
         logger.info(
