@@ -38,6 +38,7 @@ import yaml
 
 from core.audit_logger import AuditLogger
 from core.orchestrator import Orchestrator, OrchestrationError
+from core.vm_manager import VMManager, VMManagerError
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +293,20 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--vm-name",
+        type=str,
+        default=None,
+        help="Target Hyper-V VM Name to stop and start automatically",
+    )
+
+    parser.add_argument(
+        "--vhdx-path",
+        type=Path,
+        default=None,
+        help="Path to Windows 11 VHDX to mount and infect",
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 1.0.0",
@@ -316,11 +331,27 @@ def main() -> int:
     logger = logging.getLogger(__name__)
     logger.info("ARC - Artifact Reality Composer starting...")
 
+    vm_manager = None
+    
     try:
         # Load configuration
         logger.debug("Loading config from: %s", args.config)
         config = load_config(args.config)
         config = merge_cli_args(config, args)
+        
+        # Determine if we are doing VM direct-injection
+        if args.vhdx_path:
+            logger.info("VM Direct Injection Mode enabled")
+            vm_manager = VMManager(str(args.vhdx_path))
+            
+            # Optionally power down a linked VM first
+            if args.vm_name:
+                vm_manager.stop_vm(args.vm_name)
+                
+            # Mount and update Mount Path
+            mounted_drive = vm_manager.mount_vhdx()
+            config["mount_path"] = mounted_drive
+            logger.info("Redirecting ARC output to %s", mounted_drive)
 
         # Initialize audit logger
         audit_path = Path(config.get("audit_log_path", "audit.log"))
@@ -341,10 +372,17 @@ def main() -> int:
 
         if num_services == 0:
             logger.warning("No services registered. Nothing to do.")
+            if vm_manager:
+                vm_manager.dismount_vhdx()
             return 0
 
         # Execute orchestration
         result = orchestrator.run()
+        
+        # Power up if everything succeeded and VM was provided
+        if result.success and vm_manager and args.vm_name:
+            vm_manager.dismount_vhdx()
+            vm_manager.start_vm(args.vm_name)
 
         # Report results
         if result.success:
@@ -385,6 +423,11 @@ def main() -> int:
         return 1
 
     finally:
+        if vm_manager:
+            try:
+                vm_manager.dismount_vhdx()
+            except Exception as dismount_err:
+                logger.error("Failed to dismount VHDX during cleanup: %s", dismount_err)
         if "orchestrator" in locals():
             orchestrator.cleanup()
 
