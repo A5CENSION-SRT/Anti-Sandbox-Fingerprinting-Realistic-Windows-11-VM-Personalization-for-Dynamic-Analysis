@@ -24,6 +24,16 @@ $Recycle.Bin/
     $RIPBEUL.txt (35,852 bytes)
     $RTQKLQB.log (46,906 bytes)
     desktop.ini (129 bytes)
+  S-1-5-21-1927859110-1176697353-3960136925-1001/
+    $ILXBGKU.zip (120 bytes)
+    $IROETT7.py (120 bytes)
+    $ISXAD4D (130 bytes)
+    $IYMVQHZ.log (122 bytes)
+    $RLXBGKU.zip (4,801,459 bytes)
+    $RROETT7.py (9,190 bytes)
+    $RSXAD4D (108,398,156 bytes)
+    $RYMVQHZ.log (38,464 bytes)
+    desktop.ini (129 bytes)
   S-1-5-21-2023946491-3547974854-2430333802-1001/
     $I90W4JU.py (120 bytes)
     $IAOWLKJ.zip (120 bytes)
@@ -64,6 +74,35 @@ $Recycle.Bin/
     desktop.ini (129 bytes)
   S-1-5-21-883108815-2968270253-649368464-1001/
     desktop.ini (129 bytes)
+Program Files/
+  Docker/
+    Docker/
+  Git/
+    cmd/
+  Google/
+    Chrome/
+      Application/
+  Microsoft Office/
+    root/
+      Office16/
+  Microsoft OneDrive/
+  nodejs/
+  VideoLAN/
+    VLC/
+  WindowsApps/
+    Microsoft.WindowsCalculator/
+    Microsoft.WindowsTerminal/
+    MSTeams/
+Program Files (x86)/
+  Microsoft/
+    Edge/
+      Application/
+ProgramData/
+  Microsoft/
+    Windows/
+      Start Menu/
+        Programs/
+    Windows Defender/
 Users/
   david.turner/
     NTUSER.DAT (8,192 bytes)
@@ -136,22 +175,22 @@ Users/
                 Session Storage/
           Windows/
             Explorer/
-              iconcache_idx.db (4,188 bytes)
-              thumbcache_1280.db (395,357 bytes)
-              thumbcache_16.db (16,289 bytes)
-              thumbcache_1920.db (649,567 bytes)
-              thumbcache_256.db (270,933 bytes)
-              thumbcache_2560.db (3,184,878 bytes)
-              thumbcache_32.db (26,890 bytes)
-              thumbcache_48.db (28,204 bytes)
-              thumbcache_768.db (281,972 bytes)
+              iconcache_idx.db (3,420 bytes)
+              thumbcache_1280.db (753,573 bytes)
+              thumbcache_16.db (11,273 bytes)
+              thumbcache_1920.db (1,412,782 bytes)
+              thumbcache_256.db (218,595 bytes)
+              thumbcache_2560.db (2,784,682 bytes)
+              thumbcache_32.db (20,023 bytes)
+              thumbcache_48.db (52,181 bytes)
+              thumbcache_768.db (441,119 bytes)
               thumbcache_96.db (107,744 bytes)
-              thumbcache_custom_stream.db (37,188 bytes)
-              thumbcache_exif.db (32,496 bytes)
-              thumbcache_idx.db (15,678 bytes)
-              thumbcache_sr.db (62,853 bytes)
-              thumbcache_wide.db (80,886 bytes)
-              thumbcache_wide_alternate.db (126,265 bytes)
+              thumbcache_custom_stream.db (16,184 bytes)
+              thumbcache_exif.db (20,640 bytes)
+              thumbcache_idx.db (9,264 bytes)
+              thumbcache_sr.db (75,659 bytes)
+              thumbcache_wide.db (108,616 bytes)
+              thumbcache_wide_alternate.db (77,315 bytes)
             History/
             INetCache/
             INetCookies/
@@ -179,19 +218,19 @@ Users/
             Printer Shortcuts/
             Recent/
               .env.lnk (172 bytes)
-              config.yaml.lnk (193 bytes)
-              docker-compose.yml.lnk (214 bytes)
               GitHub.lnk (179 bytes)
-              main.py.lnk (181 bytes)
-              package.json.lnk (196 bytes)
               Projects.lnk (175 bytes)
               README.md.lnk (187 bytes)
+              config.yaml.lnk (193 bytes)
+              docker-compose.yml.lnk (214 bytes)
+              main.py.lnk (181 bytes)
+              package.json.lnk (196 bytes)
               requirements.txt.lnk (208 bytes)
               AutomaticDestinations/
-                5d696d521de238c3.automaticDestinations-ms (2,965 bytes)
-                7e4dca80246863e3.automaticDestinations-ms (2,526 bytes)
-                9b9cdc69c1c24e2b.automaticDestinations-ms (1,174 bytes)
-                f01b4d95cf55d32a.automaticDestinations-ms (4,279 bytes)
+                5d696d521de238c3.automaticDestinations-ms (1,076 bytes)
+                7e4dca80246863e3.automaticDestinations-ms (1,180 bytes)
+                9b9cdc69c1c24e2b.automaticDestinations-ms (2,847 bytes)
+                f01b4d95cf55d32a.automaticDestinations-ms (2,147 bytes)
               CustomDestinations/
             SendTo/
             Start Menu/
@@ -202,14 +241,14 @@ Users/
     Contacts/
     Desktop/
     Documents/
-      API_Spec.docx (17,888 bytes)
+      API_Spec.docx (42,789 bytes)
       ARCHITECTURE.md (430 bytes)
+      README.md (363 bytes)
+      Sprint_Notes.txt (332 bytes)
       config.json (249 bytes)
       database_schema.docx (27,389 bytes)
-      README.md (363 bytes)
       requirements.txt (153 bytes)
-      Sprint_Notes.txt (332 bytes)
-      test_report.pdf (4,929 bytes)
+      test_report.pdf (5,405 bytes)
     Downloads/
     Favorites/
     go/
@@ -217,9 +256,9 @@ Users/
     Music/
     OneDrive/
     Pictures/
-      architecture_diagram.png (523,169 bytes)
-      screenshot_debug.png (192,772 bytes)
-      ui_mockup.png (162,033 bytes)
+      architecture_diagram.png (606,973 bytes)
+      screenshot_debug.png (232,676 bytes)
+      ui_mockup.png (578,053 bytes)
     Saved Games/
     Searches/
     source/
@@ -228,8 +267,16 @@ Users/
         infrastructure/
         webapp-frontend/
     Videos/
-      demo_recording.mp4 (28,896,006 bytes)
+      demo_recording.mp4 (24,574,052 bytes)
+  Public/
+    Desktop/
+    Documents/
+    Downloads/
 Windows/
+  Fonts/
+  INF/
+  Installer/
+  Logs/
   Prefetch/
     CHROME.EXE-46C53156.pf (512 bytes)
     CMD.EXE-ED351006.pf (512 bytes)
@@ -246,6 +293,8 @@ Windows/
     SVCHOST.EXE-6B349D03.pf (512 bytes)
     TASKHOSTW.EXE-B9A2E6D6.pf (512 bytes)
     WINDOWSTERMINAL.EXE-34C797E5.pf (512 bytes)
+  SoftwareDistribution/
+    Download/
   System32/
     config/
       DEFAULT (8,192 bytes)
@@ -255,6 +304,9 @@ Windows/
       SOFTWARE.bak (8,192 bytes)
       SYSTEM (8,192 bytes)
       SYSTEM.bak (8,192 bytes)
+    drivers/
+      etc/
+    Tasks/
     winevt/
       Logs/
         Application.evtx (69,632 bytes)
@@ -263,3 +315,6 @@ Windows/
         Security.evtx.bak (69,632 bytes)
         System.evtx (69,632 bytes)
         System.evtx.bak (69,632 bytes)
+  SysWOW64/
+  Temp/
+  WinSxS/

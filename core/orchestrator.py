@@ -413,6 +413,66 @@ class Orchestrator:
         evtx_dir = mount_path / "Windows/System32/winevt/Logs"
         evtx_dir.mkdir(parents=True, exist_ok=True)
 
+        # Create the standard Windows directory skeleton
+        self._create_system_directories(mount_path, username)
+
+    # ------------------------------------------------------------------
+    def _create_system_directories(
+        self, mount_path: Path, username: str
+    ) -> None:
+        """Create standard Windows system directories on the target.
+
+        Ensures the VHD has a realistic directory layout matching
+        a real Windows installation (Program Files, ProgramData, etc.).
+        """
+        system_dirs = [
+            # Root-level system directories
+            "Program Files",
+            "Program Files (x86)",
+            "ProgramData",
+            "ProgramData/Microsoft/Windows/Start Menu/Programs",
+            "ProgramData/Microsoft/Windows Defender",
+            # Windows system directories
+            "Windows/Fonts",
+            "Windows/Logs",
+            "Windows/Temp",
+            "Windows/System32/drivers/etc",
+            "Windows/System32/Tasks",
+            "Windows/SysWOW64",
+            "Windows/WinSxS",
+            "Windows/INF",
+            "Windows/Installer",
+            "Windows/SoftwareDistribution/Download",
+            # Common Program Files subdirectories (from installed_programs)
+            "Program Files/Google/Chrome/Application",
+            "Program Files/Microsoft Office/root/Office16",
+            "Program Files/Docker/Docker",
+            "Program Files/Git/cmd",
+            "Program Files/nodejs",
+            "Program Files/VideoLAN/VLC",
+            "Program Files/Microsoft OneDrive",
+            "Program Files/WindowsApps/Microsoft.WindowsTerminal",
+            "Program Files/WindowsApps/Microsoft.WindowsCalculator",
+            "Program Files/WindowsApps/MSTeams",
+            "Program Files (x86)/Microsoft/Edge/Application",
+            # Common Users-level directories
+            f"Users/Public/Desktop",
+            f"Users/Public/Documents",
+            f"Users/Public/Downloads",
+        ]
+
+        created = 0
+        for rel_dir in system_dirs:
+            dir_path = mount_path / rel_dir
+            if not dir_path.exists():
+                dir_path.mkdir(parents=True, exist_ok=True)
+                created += 1
+
+        if created:
+            logger.info(
+                "Created %d system directories on %s", created, mount_path
+            )
+
     def register_service(self, service_class: Type) -> None:
         """Register a service for execution.
 
