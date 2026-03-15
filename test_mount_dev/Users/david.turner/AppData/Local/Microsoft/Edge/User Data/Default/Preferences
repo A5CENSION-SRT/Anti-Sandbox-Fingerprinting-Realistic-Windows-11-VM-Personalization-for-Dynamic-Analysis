@@ -1,0 +1,61 @@
+{
+  "bookmark_bar": {
+    "show_on_all_tabs": true
+  },
+  "browser": {
+    "has_seen_welcome_page": true,
+    "show_home_button": true,
+    "check_default_browser": false,
+    "window_placement": {
+      "bottom": 1040,
+      "left": 0,
+      "maximized": true,
+      "right": 1920,
+      "top": 0,
+      "work_area_bottom": 1040,
+      "work_area_left": 0,
+      "work_area_right": 1920,
+      "work_area_top": 0
+    }
+  },
+  "creation_time": "13395531878228030",
+  "default_search_provider_data": {
+    "template_url_data": {
+      "keyword": "google.com",
+      "short_name": "Google",
+      "url": "https://www.google.com/search?q={searchTerms}"
+    }
+  },
+  "download": {
+    "default_directory": "C:\\Users\\david.turner\\Downloads",
+    "directory_upgrade": true,
+    "prompt_for_download": false
+  },
+  "homepage": "https://www.google.com/",
+  "homepage_is_newtabpage": true,
+  "profile": {
+    "avatar_index": 0,
+    "content_settings": {
+      "exceptions": {}
+    },
+    "creation_time": "13395531878228030",
+    "default_content_setting_values": {
+      "cookies": 1,
+      "notifications": 2,
+      "popups": 2
+    },
+    "exit_type": "Normal",
+    "exited_cleanly": true,
+    "name": "Person 1"
+  },
+  "savefile": {
+    "default_directory": "C:\\Users\\david.turner\\Downloads"
+  },
+  "session": {
+    "restore_on_startup": 1
+  },
+  "translate_accepted_count": {},
+  "translate_blocked_languages": [
+    "en"
+  ]
+}

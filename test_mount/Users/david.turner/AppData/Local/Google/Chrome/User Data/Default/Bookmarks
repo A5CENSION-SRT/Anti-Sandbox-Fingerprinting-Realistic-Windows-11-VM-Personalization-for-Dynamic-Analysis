@@ -1,0 +1,206 @@
+{
+  "checksum": "",
+  "roots": {
+    "bookmark_bar": {
+      "children": [
+        {
+          "name": "Work",
+          "type": "folder",
+          "children": [
+            {
+              "name": "Outlook - Microsoft 365",
+              "type": "url",
+              "url": "https://outlook.office365.com/",
+              "id": "3",
+              "date_added": "13382585804714619"
+            },
+            {
+              "name": "Microsoft Teams",
+              "type": "url",
+              "url": "https://teams.microsoft.com/",
+              "id": "4",
+              "date_added": "13382585809714619"
+            },
+            {
+              "name": "SharePoint",
+              "type": "url",
+              "url": "https://sharepoint.com/",
+              "id": "5",
+              "date_added": "13382585814714619"
+            },
+            {
+              "name": "OneDrive",
+              "type": "url",
+              "url": "https://onedrive.live.com/",
+              "id": "6",
+              "date_added": "13382585819714619"
+            },
+            {
+              "name": "Salesforce",
+              "type": "url",
+              "url": "https://www.salesforce.com/",
+              "id": "7",
+              "date_added": "13382585824714619"
+            }
+          ],
+          "id": "2",
+          "date_added": "13382585804714619",
+          "date_modified": "13382585864714619"
+        },
+        {
+          "name": "Productivity",
+          "type": "folder",
+          "children": [
+            {
+              "name": "Google Docs",
+              "type": "url",
+              "url": "https://docs.google.com/document/",
+              "id": "9",
+              "date_added": "13382585809714619"
+            },
+            {
+              "name": "Google Sheets",
+              "type": "url",
+              "url": "https://docs.google.com/spreadsheets/",
+              "id": "10",
+              "date_added": "13382585814714619"
+            },
+            {
+              "name": "Notion",
+              "type": "url",
+              "url": "https://www.notion.so/",
+              "id": "11",
+              "date_added": "13382585819714619"
+            },
+            {
+              "name": "Trello",
+              "type": "url",
+              "url": "https://trello.com/",
+              "id": "12",
+              "date_added": "13382585824714619"
+            },
+            {
+              "name": "Asana",
+              "type": "url",
+              "url": "https://asana.com/",
+              "id": "13",
+              "date_added": "13382585829714619"
+            }
+          ],
+          "id": "8",
+          "date_added": "13382585809714619",
+          "date_modified": "13382585869714619"
+        },
+        {
+          "name": "Company",
+          "type": "folder",
+          "children": [
+            {
+              "name": "Company Intranet",
+              "type": "url",
+              "url": "https://intranet.acmecorp.com/",
+              "id": "15",
+              "date_added": "13382585814714619"
+            },
+            {
+              "name": "HR Portal",
+              "type": "url",
+              "url": "https://hr.acmecorp.com/",
+              "id": "16",
+              "date_added": "13382585819714619"
+            },
+            {
+              "name": "IT Helpdesk",
+              "type": "url",
+              "url": "https://helpdesk.acmecorp.com/",
+              "id": "17",
+              "date_added": "13382585824714619"
+            },
+            {
+              "name": "Expense Reports",
+              "type": "url",
+              "url": "https://expenses.acmecorp.com/",
+              "id": "18",
+              "date_added": "13382585829714619"
+            }
+          ],
+          "id": "14",
+          "date_added": "13382585814714619",
+          "date_modified": "13382585874714619"
+        },
+        {
+          "name": "LinkedIn",
+          "type": "url",
+          "url": "https://www.linkedin.com/feed/",
+          "id": "19",
+          "date_added": "13382585819714619"
+        },
+        {
+          "name": "Google Calendar",
+          "type": "url",
+          "url": "https://calendar.google.com/",
+          "id": "20",
+          "date_added": "13382585824714619"
+        }
+      ],
+      "name": "Bookmarks bar",
+      "type": "folder",
+      "id": "1",
+      "date_added": "13382585804714619",
+      "date_modified": "13382585805714619"
+    },
+    "other": {
+      "children": [
+        {
+          "name": "BBC News",
+          "type": "url",
+          "url": "https://www.bbc.com/news",
+          "id": "22",
+          "date_added": "13382585804714619"
+        },
+        {
+          "name": "Reuters",
+          "type": "url",
+          "url": "https://www.reuters.com/",
+          "id": "23",
+          "date_added": "13382585809714619"
+        },
+        {
+          "name": "CNBC",
+          "type": "url",
+          "url": "https://www.cnbc.com/",
+          "id": "24",
+          "date_added": "13382585814714619"
+        },
+        {
+          "name": "Indeed",
+          "type": "url",
+          "url": "https://www.indeed.com/",
+          "id": "25",
+          "date_added": "13382585819714619"
+        },
+        {
+          "name": "Glassdoor",
+          "type": "url",
+          "url": "https://www.glassdoor.com/",
+          "id": "26",
+          "date_added": "13382585824714619"
+        }
+      ],
+      "name": "Other bookmarks",
+      "type": "folder",
+      "id": "21",
+      "date_added": "13382585804714619",
+      "date_modified": "13382585805714619"
+    },
+    "synced": {
+      "children": [],
+      "name": "Mobile bookmarks",
+      "type": "folder",
+      "id": "27",
+      "date_added": "13382585804714619",
+      "date_modified": "13382585805714619"
+    }
+  },
+  "version": 1
+}

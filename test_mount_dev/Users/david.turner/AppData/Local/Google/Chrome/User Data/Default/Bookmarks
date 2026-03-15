@@ -1,0 +1,285 @@
+{
+  "checksum": "",
+  "roots": {
+    "bookmark_bar": {
+      "children": [
+        {
+          "name": "Dev",
+          "type": "folder",
+          "children": [
+            {
+              "name": "GitHub",
+              "type": "url",
+              "url": "https://github.com/",
+              "id": "3",
+              "date_added": "13382585893888177"
+            },
+            {
+              "name": "GitHub Notifications",
+              "type": "url",
+              "url": "https://github.com/notifications",
+              "id": "4",
+              "date_added": "13382585898888177"
+            },
+            {
+              "name": "GitLab",
+              "type": "url",
+              "url": "https://gitlab.com/",
+              "id": "5",
+              "date_added": "13382585903888177"
+            },
+            {
+              "name": "Docker Hub",
+              "type": "url",
+              "url": "https://hub.docker.com/",
+              "id": "6",
+              "date_added": "13382585908888177"
+            },
+            {
+              "name": "PyPI",
+              "type": "url",
+              "url": "https://pypi.org/",
+              "id": "7",
+              "date_added": "13382585913888177"
+            },
+            {
+              "name": "npm",
+              "type": "url",
+              "url": "https://www.npmjs.com/",
+              "id": "8",
+              "date_added": "13382585918888177"
+            }
+          ],
+          "id": "2",
+          "date_added": "13382585893888177",
+          "date_modified": "13382585953888177"
+        },
+        {
+          "name": "Docs",
+          "type": "folder",
+          "children": [
+            {
+              "name": "Python 3 Docs",
+              "type": "url",
+              "url": "https://docs.python.org/3/",
+              "id": "10",
+              "date_added": "13382585898888177"
+            },
+            {
+              "name": "MDN Web Docs",
+              "type": "url",
+              "url": "https://developer.mozilla.org/en-US/",
+              "id": "11",
+              "date_added": "13382585903888177"
+            },
+            {
+              "name": "React",
+              "type": "url",
+              "url": "https://react.dev/",
+              "id": "12",
+              "date_added": "13382585908888177"
+            },
+            {
+              "name": "Docker Docs",
+              "type": "url",
+              "url": "https://docs.docker.com/",
+              "id": "13",
+              "date_added": "13382585913888177"
+            },
+            {
+              "name": "Kubernetes Docs",
+              "type": "url",
+              "url": "https://kubernetes.io/docs/",
+              "id": "14",
+              "date_added": "13382585918888177"
+            },
+            {
+              "name": "FastAPI",
+              "type": "url",
+              "url": "https://fastapi.tiangolo.com/",
+              "id": "15",
+              "date_added": "13382585923888177"
+            },
+            {
+              "name": "Node.js Docs",
+              "type": "url",
+              "url": "https://nodejs.org/docs/latest/api/",
+              "id": "16",
+              "date_added": "13382585928888177"
+            },
+            {
+              "name": "VS Code Docs",
+              "type": "url",
+              "url": "https://code.visualstudio.com/docs",
+              "id": "17",
+              "date_added": "13382585933888177"
+            }
+          ],
+          "id": "9",
+          "date_added": "13382585898888177",
+          "date_modified": "13382585958888177"
+        },
+        {
+          "name": "Community",
+          "type": "folder",
+          "children": [
+            {
+              "name": "Stack Overflow",
+              "type": "url",
+              "url": "https://stackoverflow.com/",
+              "id": "19",
+              "date_added": "13382585903888177"
+            },
+            {
+              "name": "Hacker News",
+              "type": "url",
+              "url": "https://news.ycombinator.com/",
+              "id": "20",
+              "date_added": "13382585908888177"
+            },
+            {
+              "name": "Dev.to",
+              "type": "url",
+              "url": "https://dev.to/",
+              "id": "21",
+              "date_added": "13382585913888177"
+            },
+            {
+              "name": "r/programming",
+              "type": "url",
+              "url": "https://www.reddit.com/r/programming/",
+              "id": "22",
+              "date_added": "13382585918888177"
+            }
+          ],
+          "id": "18",
+          "date_added": "13382585903888177",
+          "date_modified": "13382585963888177"
+        },
+        {
+          "name": "Cloud",
+          "type": "folder",
+          "children": [
+            {
+              "name": "AWS Console",
+              "type": "url",
+              "url": "https://console.aws.amazon.com/",
+              "id": "24",
+              "date_added": "13382585908888177"
+            },
+            {
+              "name": "Google Cloud Console",
+              "type": "url",
+              "url": "https://console.cloud.google.com/",
+              "id": "25",
+              "date_added": "13382585913888177"
+            },
+            {
+              "name": "Azure Portal",
+              "type": "url",
+              "url": "https://portal.azure.com/",
+              "id": "26",
+              "date_added": "13382585918888177"
+            },
+            {
+              "name": "Vercel",
+              "type": "url",
+              "url": "https://vercel.com/dashboard",
+              "id": "27",
+              "date_added": "13382585923888177"
+            },
+            {
+              "name": "Netlify",
+              "type": "url",
+              "url": "https://app.netlify.com/",
+              "id": "28",
+              "date_added": "13382585928888177"
+            }
+          ],
+          "id": "23",
+          "date_added": "13382585908888177",
+          "date_modified": "13382585968888177"
+        },
+        {
+          "name": "GitHub Copilot",
+          "type": "url",
+          "url": "https://github.com/features/copilot",
+          "id": "29",
+          "date_added": "13382585913888177"
+        },
+        {
+          "name": "ChatGPT",
+          "type": "url",
+          "url": "https://chat.openai.com/",
+          "id": "30",
+          "date_added": "13382585918888177"
+        }
+      ],
+      "name": "Bookmarks bar",
+      "type": "folder",
+      "id": "1",
+      "date_added": "13382585893888177",
+      "date_modified": "13382585894888177"
+    },
+    "other": {
+      "children": [
+        {
+          "name": "TechCrunch",
+          "type": "url",
+          "url": "https://techcrunch.com/",
+          "id": "32",
+          "date_added": "13382585893888177"
+        },
+        {
+          "name": "Ars Technica",
+          "type": "url",
+          "url": "https://arstechnica.com/",
+          "id": "33",
+          "date_added": "13382585898888177"
+        },
+        {
+          "name": "The Verge",
+          "type": "url",
+          "url": "https://www.theverge.com/",
+          "id": "34",
+          "date_added": "13382585903888177"
+        },
+        {
+          "name": "LinkedIn",
+          "type": "url",
+          "url": "https://www.linkedin.com/feed/",
+          "id": "35",
+          "date_added": "13382585908888177"
+        },
+        {
+          "name": "Regex101",
+          "type": "url",
+          "url": "https://regex101.com/",
+          "id": "36",
+          "date_added": "13382585913888177"
+        },
+        {
+          "name": "JSON Formatter",
+          "type": "url",
+          "url": "https://jsonformatter.curiousconcept.com/",
+          "id": "37",
+          "date_added": "13382585918888177"
+        }
+      ],
+      "name": "Other bookmarks",
+      "type": "folder",
+      "id": "31",
+      "date_added": "13382585893888177",
+      "date_modified": "13382585894888177"
+    },
+    "synced": {
+      "children": [],
+      "name": "Mobile bookmarks",
+      "type": "folder",
+      "id": "38",
+      "date_added": "13382585893888177",
+      "date_modified": "13382585894888177"
+    }
+  },
+  "version": 1
+}

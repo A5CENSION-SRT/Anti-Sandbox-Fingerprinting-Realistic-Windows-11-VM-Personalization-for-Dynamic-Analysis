@@ -1,0 +1,37 @@
+{
+  "browser": {
+    "enabled_labs_experiments": [],
+    "has_seen_welcome_page": true
+  },
+  "data_reduction": {
+    "daily_original_length": [
+      "0",
+      "0",
+      "0",
+      "0",
+      "0",
+      "0",
+      "0"
+    ]
+  },
+  "profile": {
+    "created_by_version": "120.0.6099.130",
+    "info_cache": {
+      "Default": {
+        "active_time": 13395531789054472,
+        "is_consented_primary_account": false,
+        "is_using_default_avatar": true,
+        "is_using_default_name": true,
+        "name": "Person 1"
+      }
+    },
+    "last_used": "Default",
+    "profiles_created": 1,
+    "profiles_order": [
+      "Default"
+    ]
+  },
+  "uninstall_metrics": {
+    "installation_date2": "13395531789054472"
+  }
+}

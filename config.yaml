@@ -1,0 +1,14 @@
+# Arc — Anti-Sandbox Personalizer configuration
+# Override these defaults via CLI flags.
+
+defaults:
+  profile: office_user
+  timeline_days: 90
+  browsers:
+    - Chrome
+    - Edge
+
+paths:
+  profiles_dir: profiles
+  data_dir: data
+  templates_dir: templates

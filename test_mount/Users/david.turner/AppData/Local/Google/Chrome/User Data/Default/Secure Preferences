@@ -1,0 +1,17 @@
+{
+  "protection": {
+    "macs": {
+      "browser": {
+        "show_home_button": ""
+      },
+      "default_search_provider_data": {
+        "template_url_data": ""
+      },
+      "homepage": "",
+      "homepage_is_newtabpage": "",
+      "session": {
+        "restore_on_startup": ""
+      }
+    }
+  }
+}
