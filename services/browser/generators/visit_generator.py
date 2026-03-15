@@ -48,6 +48,9 @@ def generate_visits_for_day(
     Each session is a list of ``(url, minute_offset)`` tuples.
     ``minute_offset`` is relative to ``hour_start``.
     """
+    if not url_entries:
+        return []
+
     total_minutes = (hour_end - hour_start) * 60
     num_sessions = rng.randint(1, min(5, max(1, day_visits)))
     visits_per = max(1, day_visits // num_sessions)

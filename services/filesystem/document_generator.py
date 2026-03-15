@@ -397,15 +397,20 @@ class DocumentGenerator(BaseService):
         """Generate text content from template."""
         template = _TEXT_TEMPLATES.get(template_key, "")
 
-        # Fill in placeholders
+        # Fill in placeholders — gracefully handle templates that
+        # contain literal curly braces (e.g. JSON config content).
         now = datetime.now(timezone.utc)
-        content = template.format(
-            date=now.strftime("%B %d, %Y"),
-            names="Team Members",
-            sprint_num=rng.randint(10, 50),
-            start_date=(now.replace(day=1)).strftime("%Y-%m-%d"),
-            end_date=now.strftime("%Y-%m-%d"),
-        )
+        try:
+            content = template.format(
+                date=now.strftime("%B %d, %Y"),
+                names="Team Members",
+                sprint_num=rng.randint(10, 50),
+                start_date=(now.replace(day=1)).strftime("%Y-%m-%d"),
+                end_date=now.strftime("%Y-%m-%d"),
+            )
+        except (KeyError, IndexError, ValueError):
+            # Template has unprocessable placeholders (e.g. JSON braces)
+            content = template
         return content
 
     def _generate_docx_stub(

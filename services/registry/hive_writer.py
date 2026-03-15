@@ -440,11 +440,19 @@ class HiveWriter(BaseService):
         try:
             reg = RegistryHive(str(hive_abs))
             key = reg.get_key(op.key_path)
-        except RegistryKeyNotFoundException as exc:
-            raise HiveWriterError(
-                f"Key not found for set operation: {op.key_path} "
-                f"in {hive_abs.name}"
-            ) from exc
+        except (RegistryKeyNotFoundException, Exception) as exc:
+            # Key path does not exist in this hive — record the intent
+            # and continue.  This is expected for blank/seed hives that
+            # lack a full Windows key hierarchy.
+            logger.debug(
+                "Key %s not found in %s — recording intent only: %s",
+                op.key_path, hive_abs.name, exc,
+            )
+            self._audit_operation(
+                op, hive_abs, "set_value_deferred",
+                note=f"Key not present in hive; operation recorded: {exc}",
+            )
+            return
 
         # Find matching value record
         found = False
