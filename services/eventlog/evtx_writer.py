@@ -228,11 +228,16 @@ class EvtxWriter(BaseService):
             records:    list[EvtxRecord]
             evtx_path:  str — relative path from mount root (e.g.
                         ``"Windows/System32/winevt/Logs/System.evtx"``)
+
+        When called without evtx_path this is a no-op — the individual
+        log services (SystemLog, SecurityLog, ApplicationLog) call
+        :meth:`write_records` directly with their own path.
         """
         records = context.get("records", [])
         evtx_path = context.get("evtx_path")
         if not evtx_path:
-            raise EvtxWriterError("Missing required 'evtx_path' in context")
+            # No-op: log services call write_records() directly
+            return
         self.write_records(records, evtx_path)
 
     # -- public API ---------------------------------------------------------

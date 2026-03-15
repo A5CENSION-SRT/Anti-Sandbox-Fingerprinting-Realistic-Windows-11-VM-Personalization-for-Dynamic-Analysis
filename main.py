@@ -52,6 +52,7 @@ _DEFAULT_OUTPUT = "./output"
 _SERVICE_MODULES = {
     "filesystem": [
         ("services.filesystem.user_directory", "UserDirectoryService"),
+        ("services.filesystem.installed_apps_stub", "InstalledAppsStub"),
         ("services.filesystem.document_generator", "DocumentGenerator"),
         ("services.filesystem.media_stub", "MediaStubService"),
         ("services.filesystem.prefetch", "PrefetchService"),

@@ -7,3 +7,5 @@ dist/
 build/
 .env
 *.log
+images/*.vhd
+images/*.vhdx
