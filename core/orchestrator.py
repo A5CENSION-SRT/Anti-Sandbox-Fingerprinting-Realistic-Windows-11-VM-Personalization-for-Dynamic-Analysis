@@ -15,10 +15,13 @@ It handles:
 from __future__ import annotations
 
 import logging
+import re
+import struct
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from core.audit_logger import AuditLogger
 from core.identity_generator import IdentityGenerator
@@ -27,6 +30,100 @@ from core.profile_engine import ProfileEngine
 from core.timestamp_service import TimestampService
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Seed Hive Constants — minimal valid Windows NT registry hive binary
+# ---------------------------------------------------------------------------
+
+_HIVE_HEADER_SIZE = 4096
+_HIVE_BIN_HEADER_SIZE = 32
+_NK_ROOT_SIZE = 80
+
+
+def _create_minimal_hive(path: Path) -> None:
+    """Write a minimal but structurally valid Windows NT registry hive.
+
+    This creates the smallest hive that ``regipy`` can open and modify:
+    - 4096-byte base block ("regf" header)
+    - One hive bin ("hbin") containing a single root NK cell
+
+    The hive is intentionally tiny; higher-level services will add
+    keys and values via HiveWriter.
+    """
+    import hashlib
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    bin_data_size = 4096  # one page
+    hive_data = bytearray(_HIVE_HEADER_SIZE + bin_data_size)
+
+    # ── Base Block (regf) ── offset 0 ──────────────────────────────
+    struct.pack_into("<4s", hive_data, 0, b"regf")         # signature
+    struct.pack_into("<I", hive_data, 4, 1)                 # primary seq
+    struct.pack_into("<I", hive_data, 8, 1)                 # secondary seq
+    struct.pack_into("<Q", hive_data, 12, 0)                # last written ts
+    struct.pack_into("<I", hive_data, 20, 1)                # major version
+    struct.pack_into("<I", hive_data, 24, 5)                # minor version
+    struct.pack_into("<I", hive_data, 28, 0)                # type (0 = primary)
+    struct.pack_into("<I", hive_data, 32, 1)                # format (1 = direct mem)
+    struct.pack_into("<I", hive_data, 36, 32)               # root cell offset
+    struct.pack_into("<I", hive_data, 40, bin_data_size)    # hive bins data size
+    struct.pack_into("<I", hive_data, 44, 1)                # clustering factor
+    # File name (UTF-16LE, up to 64 bytes at offset 48)
+    fname = path.stem.encode("utf-16-le")[:64]
+    hive_data[48:48 + len(fname)] = fname
+    # Checksum at offset 508
+    checksum = 0
+    for i in range(0, 508, 4):
+        checksum ^= struct.unpack_from("<I", hive_data, i)[0]
+    struct.pack_into("<I", hive_data, 508, checksum)
+
+    # ── Hive Bin (hbin) ── offset 4096 ─────────────────────────────
+    hbin_off = _HIVE_HEADER_SIZE
+    struct.pack_into("<4s", hive_data, hbin_off, b"hbin")   # signature
+    struct.pack_into("<I", hive_data, hbin_off + 4, 0)      # offset from start
+    struct.pack_into("<I", hive_data, hbin_off + 8, bin_data_size)  # size
+    struct.pack_into("<Q", hive_data, hbin_off + 12, 0)     # reserved
+    struct.pack_into("<Q", hive_data, hbin_off + 20, 0)     # timestamp
+    struct.pack_into("<I", hive_data, hbin_off + 28, 0)     # spare
+
+    # ── Root NK Cell ── offset 4096 + 32 ───────────────────────────
+    cell_off = hbin_off + _HIVE_BIN_HEADER_SIZE
+    root_name = b"CMI-CreateHive{2A7FB991-7BBE-4F9D-B91E-7CB328BEC3A6}"
+    cell_size = 76 + len(root_name)  # NK header + name
+    # Negative size = allocated cell
+    struct.pack_into("<i", hive_data, cell_off, -cell_size)
+    struct.pack_into("<2s", hive_data, cell_off + 4, b"nk")  # signature
+    struct.pack_into("<H", hive_data, cell_off + 6, 0x0020)  # flags = KEY_HIVE_ENTRY
+    struct.pack_into("<Q", hive_data, cell_off + 8, 0)       # timestamp
+    struct.pack_into("<I", hive_data, cell_off + 16, 0)      # access bits
+    struct.pack_into("<I", hive_data, cell_off + 20, 0xFFFFFFFF)  # parent (-1)
+    struct.pack_into("<I", hive_data, cell_off + 24, 0)      # num subkeys stable
+    struct.pack_into("<I", hive_data, cell_off + 28, 0)      # num subkeys volatile
+    struct.pack_into("<I", hive_data, cell_off + 32, 0xFFFFFFFF)  # subkeys stable
+    struct.pack_into("<I", hive_data, cell_off + 36, 0xFFFFFFFF)  # subkeys volatile
+    struct.pack_into("<I", hive_data, cell_off + 40, 0)      # num values
+    struct.pack_into("<I", hive_data, cell_off + 44, 0xFFFFFFFF)  # values list
+    struct.pack_into("<I", hive_data, cell_off + 48, 0xFFFFFFFF)  # security
+    struct.pack_into("<I", hive_data, cell_off + 52, 0xFFFFFFFF)  # class name
+    struct.pack_into("<I", hive_data, cell_off + 56, 0)      # max subkey name len
+    struct.pack_into("<I", hive_data, cell_off + 60, 0)      # max class name len
+    struct.pack_into("<I", hive_data, cell_off + 64, 0)      # max value name len
+    struct.pack_into("<I", hive_data, cell_off + 68, 0)      # max value data size
+    struct.pack_into("<H", hive_data, cell_off + 72, len(root_name))  # name length
+    struct.pack_into("<H", hive_data, cell_off + 74, 0)      # class name length
+    hive_data[cell_off + 76:cell_off + 76 + len(root_name)] = root_name
+
+    # ── Free cell for remaining space
+    used = _HIVE_BIN_HEADER_SIZE + cell_size + 4  # +4 for cell size field
+    remaining = bin_data_size - used
+    if remaining > 4:
+        free_off = cell_off + 4 + cell_size
+        struct.pack_into("<i", hive_data, free_off, remaining)
+
+    path.write_bytes(bytes(hive_data))
+    logger.debug("Created seed hive: %s (%d bytes)", path, len(hive_data))
 
 
 # ---------------------------------------------------------------------------
@@ -238,14 +335,36 @@ class Orchestrator:
                 "organization": identity_bundle.user.organization,
             }
 
+            # Compute derived timestamps for eventlog/identity services
+            timeline_days = self._config.get("timeline_days", 90)
+            now = datetime.now(timezone.utc)
+            install_date = now - timedelta(days=timeline_days + 30)
+            boot_time = now - timedelta(hours=2)
+            install_time = install_date
+
             # Build execution context
             self._context = {
                 **identity,
                 **profile,
                 "config": self._config,
                 "dry_run": self._dry_run,
-                "timeline_days": self._config.get("timeline_days", 90),
+                "timeline_days": timeline_days,
+                # Keys required by SystemIdentity, HardwareNormalizer
+                "identity_bundle": identity_bundle,
+                # Keys required by eventlog services
+                "boot_time": boot_time,
+                "install_time": install_time,
+                "install_date": install_date,
+                # Keys required by SecurityLog
+                "domain": identity_bundle.user.computer_name,
             }
+
+            # Create seed registry hive files if the mount target has
+            # no existing hives (e.g. a fresh VHD).
+            # Use the *effective* username from context (profile_context.username
+            # may differ from identity_bundle.user.username).
+            effective_user = self._context.get("username", "default_user")
+            self._create_seed_hives(mount_path, effective_user)
 
             self._audit.log({
                 "operation": "orchestrator_init",
@@ -266,6 +385,33 @@ class Orchestrator:
         except Exception as exc:
             logger.error("Failed to initialize orchestrator: %s", exc)
             raise OrchestrationError(f"Initialization failed: {exc}") from exc
+
+    # ------------------------------------------------------------------
+    def _create_seed_hives(
+        self, mount_path: Path, username: str
+    ) -> None:
+        """Ensure minimal valid registry hive files exist on the target."""
+        hive_specs = {
+            # System hives
+            "Windows/System32/config/SOFTWARE": "SOFTWARE",
+            "Windows/System32/config/SYSTEM": "SYSTEM",
+            "Windows/System32/config/SAM": "SAM",
+            "Windows/System32/config/SECURITY": "SECURITY",
+            "Windows/System32/config/DEFAULT": "DEFAULT",
+            # User hive
+            f"Users/{username}/NTUSER.DAT": "NTUSER.DAT",
+        }
+        for rel_path, label in hive_specs.items():
+            hive_path = mount_path / rel_path
+            if not hive_path.exists():
+                logger.info("Creating seed hive: %s", rel_path)
+                _create_minimal_hive(hive_path)
+            else:
+                logger.debug("Hive already exists: %s", rel_path)
+
+        # Also ensure winevt/Logs directory exists for event logs
+        evtx_dir = mount_path / "Windows/System32/winevt/Logs"
+        evtx_dir.mkdir(parents=True, exist_ok=True)
 
     def register_service(self, service_class: Type) -> None:
         """Register a service for execution.

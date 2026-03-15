@@ -1,0 +1,265 @@
+/
+$Recycle.Bin/
+  S-1-5-21-1443391801-3236347635-3112299992-1001/
+    $I6C8MN2 (130 bytes)
+    $I6XKSRJ.backup (114 bytes)
+    $IBC8ERZ.py (120 bytes)
+    $ILL3VH7.log (122 bytes)
+    $R6C8MN2 (133,799,198 bytes)
+    $R6XKSRJ.backup (1,744 bytes)
+    $RBC8ERZ.py (2,221 bytes)
+    $RLL3VH7.log (73,328 bytes)
+    desktop.ini (129 bytes)
+  S-1-5-21-1924722711-1746049473-3087071661-1001/
+    $I2TQCAO.py (120 bytes)
+    $I33THQ2.backup (114 bytes)
+    $IBGSJV6 (130 bytes)
+    $ICGV81B.zip (120 bytes)
+    $IIPBEUL.txt (120 bytes)
+    $ITQKLQB.log (122 bytes)
+    $R2TQCAO.py (4,431 bytes)
+    $R33THQ2.backup (967 bytes)
+    $RBGSJV6 (104,029,785 bytes)
+    $RCGV81B.zip (5,749,212 bytes)
+    $RIPBEUL.txt (35,852 bytes)
+    $RTQKLQB.log (46,906 bytes)
+    desktop.ini (129 bytes)
+  S-1-5-21-2023946491-3547974854-2430333802-1001/
+    $I90W4JU.py (120 bytes)
+    $IAOWLKJ.zip (120 bytes)
+    $ICW9MIV (130 bytes)
+    $IDJKX27.txt (120 bytes)
+    $IHV9KV7.log (122 bytes)
+    $IO6Z8HZ.backup (114 bytes)
+    $R90W4JU.py (6,101 bytes)
+    $RAOWLKJ.zip (8,206,780 bytes)
+    $RCW9MIV (137,277,897 bytes)
+    $RDJKX27.txt (31,519 bytes)
+    $RHV9KV7.log (46,001 bytes)
+    $RO6Z8HZ.backup (1,672 bytes)
+    desktop.ini (129 bytes)
+  S-1-5-21-3090394484-1349853555-1404123245-1001/
+    $I911JDV.log (122 bytes)
+    $IF8NNTY.backup (114 bytes)
+    $IG6PWC2 (130 bytes)
+    $II4W341.txt (120 bytes)
+    $IND2ABP.py (120 bytes)
+    $R911JDV.log (90,328 bytes)
+    $RF8NNTY.backup (1,048 bytes)
+    $RG6PWC2 (163,753,167 bytes)
+    $RI4W341.txt (31,311 bytes)
+    $RND2ABP.py (6,294 bytes)
+    desktop.ini (129 bytes)
+  S-1-5-21-3842662992-1353407347-2594591434-1001/
+    $IFWU5EO.txt (120 bytes)
+    $IL7YG2M.log (122 bytes)
+    $IU8ZJZ6.zip (120 bytes)
+    $IVUAJ3R.backup (114 bytes)
+    $IWYWPTZ (130 bytes)
+    $RFWU5EO.txt (34,837 bytes)
+    $RL7YG2M.log (72,216 bytes)
+    $RU8ZJZ6.zip (6,385,812 bytes)
+    $RVUAJ3R.backup (910 bytes)
+    $RWYWPTZ (79,108,795 bytes)
+    desktop.ini (129 bytes)
+  S-1-5-21-883108815-2968270253-649368464-1001/
+    desktop.ini (129 bytes)
+Users/
+  david.turner/
+    NTUSER.DAT (8,192 bytes)
+  default_user/
+    .gitconfig (172 bytes)
+    NTUSER.DAT (8,192 bytes)
+    NTUSER.DAT.bak (8,192 bytes)
+    .aws/
+    .azure/
+    .config/
+    .docker/
+      config.json (85 bytes)
+    .kube/
+    .npm/
+    .nuget/
+    .ssh/
+      known_hosts (186 bytes)
+    3D Objects/
+    AppData/
+      Local/
+        Google/
+          Chrome/
+            User Data/
+              Local State (759 bytes)
+              Default/
+                Bookmarks (695 bytes)
+                Cookies (20,480 bytes)
+                History (77,824 bytes)
+                Preferences (1,488 bytes)
+                Secure Preferences (319 bytes)
+                Cache/
+                  Cache_Data/
+                    data_0 (0 bytes)
+                    data_1 (0 bytes)
+                    data_2 (0 bytes)
+                    data_3 (0 bytes)
+                    index (0 bytes)
+                Code Cache/
+                Extension State/
+                Extensions/
+                GPUCache/
+                IndexedDB/
+                Local Storage/
+                Network/
+                Session Storage/
+        Microsoft/
+          Edge/
+            User Data/
+              Local State (759 bytes)
+              Default/
+                Bookmarks (695 bytes)
+                Cookies (20,480 bytes)
+                History (77,824 bytes)
+                Preferences (1,488 bytes)
+                Secure Preferences (319 bytes)
+                Cache/
+                  Cache_Data/
+                    data_0 (0 bytes)
+                    data_1 (0 bytes)
+                    data_2 (0 bytes)
+                    data_3 (0 bytes)
+                    index (0 bytes)
+                Code Cache/
+                Extension State/
+                Extensions/
+                GPUCache/
+                IndexedDB/
+                Local Storage/
+                Network/
+                Session Storage/
+          Windows/
+            Explorer/
+              iconcache_idx.db (4,188 bytes)
+              thumbcache_1280.db (395,357 bytes)
+              thumbcache_16.db (16,289 bytes)
+              thumbcache_1920.db (649,567 bytes)
+              thumbcache_256.db (270,933 bytes)
+              thumbcache_2560.db (3,184,878 bytes)
+              thumbcache_32.db (26,890 bytes)
+              thumbcache_48.db (28,204 bytes)
+              thumbcache_768.db (281,972 bytes)
+              thumbcache_96.db (107,744 bytes)
+              thumbcache_custom_stream.db (37,188 bytes)
+              thumbcache_exif.db (32,496 bytes)
+              thumbcache_idx.db (15,678 bytes)
+              thumbcache_sr.db (62,853 bytes)
+              thumbcache_wide.db (80,886 bytes)
+              thumbcache_wide_alternate.db (126,265 bytes)
+            History/
+            INetCache/
+            INetCookies/
+            Notifications/
+            Temporary Internet Files/
+            WER/
+          WindowsApps/
+        Packages/
+        Programs/
+        Temp/
+        VirtualStore/
+      LocalLow/
+      Roaming/
+        Code/
+          User/
+            settings.json (392 bytes)
+        Microsoft/
+          Credentials/
+          Crypto/
+          Protect/
+          SystemCertificates/
+          Windows/
+            Libraries/
+            Network Shortcuts/
+            Printer Shortcuts/
+            Recent/
+              .env.lnk (172 bytes)
+              config.yaml.lnk (193 bytes)
+              docker-compose.yml.lnk (214 bytes)
+              GitHub.lnk (179 bytes)
+              main.py.lnk (181 bytes)
+              package.json.lnk (196 bytes)
+              Projects.lnk (175 bytes)
+              README.md.lnk (187 bytes)
+              requirements.txt.lnk (208 bytes)
+              AutomaticDestinations/
+                5d696d521de238c3.automaticDestinations-ms (2,965 bytes)
+                7e4dca80246863e3.automaticDestinations-ms (2,526 bytes)
+                9b9cdc69c1c24e2b.automaticDestinations-ms (1,174 bytes)
+                f01b4d95cf55d32a.automaticDestinations-ms (4,279 bytes)
+              CustomDestinations/
+            SendTo/
+            Start Menu/
+              Programs/
+                Startup/
+            Templates/
+            Themes/
+    Contacts/
+    Desktop/
+    Documents/
+      API_Spec.docx (17,888 bytes)
+      ARCHITECTURE.md (430 bytes)
+      config.json (249 bytes)
+      database_schema.docx (27,389 bytes)
+      README.md (363 bytes)
+      requirements.txt (153 bytes)
+      Sprint_Notes.txt (332 bytes)
+      test_report.pdf (4,929 bytes)
+    Downloads/
+    Favorites/
+    go/
+    Links/
+    Music/
+    OneDrive/
+    Pictures/
+      architecture_diagram.png (523,169 bytes)
+      screenshot_debug.png (192,772 bytes)
+      ui_mockup.png (162,033 bytes)
+    Saved Games/
+    Searches/
+    source/
+      repos/
+        api-service/
+        infrastructure/
+        webapp-frontend/
+    Videos/
+      demo_recording.mp4 (28,896,006 bytes)
+Windows/
+  Prefetch/
+    CHROME.EXE-46C53156.pf (512 bytes)
+    CMD.EXE-ED351006.pf (512 bytes)
+    CODE.EXE-30F2DB77.pf (512 bytes)
+    DLLHOST.EXE-CC66140B.pf (512 bytes)
+    DOCKER.EXE-B25CDE33.pf (512 bytes)
+    EXPLORER.EXE-07FE92AE.pf (512 bytes)
+    GIT.EXE-0746B510.pf (512 bytes)
+    NODE.EXE-CC07B134.pf (512 bytes)
+    NOTEPAD.EXE-E1023410.pf (512 bytes)
+    PYTHON.EXE-BC4AF6DC.pf (512 bytes)
+    RUNTIMEBROKER.EXE-178DB542.pf (512 bytes)
+    SEARCHHOST.EXE-9688551C.pf (512 bytes)
+    SVCHOST.EXE-6B349D03.pf (512 bytes)
+    TASKHOSTW.EXE-B9A2E6D6.pf (512 bytes)
+    WINDOWSTERMINAL.EXE-34C797E5.pf (512 bytes)
+  System32/
+    config/
+      DEFAULT (8,192 bytes)
+      SAM (8,192 bytes)
+      SECURITY (8,192 bytes)
+      SOFTWARE (8,192 bytes)
+      SOFTWARE.bak (8,192 bytes)
+      SYSTEM (8,192 bytes)
+      SYSTEM.bak (8,192 bytes)
+    winevt/
+      Logs/
+        Application.evtx (69,632 bytes)
+        Application.evtx.bak (69,632 bytes)
+        Security.evtx (69,632 bytes)
+        Security.evtx.bak (69,632 bytes)
+        System.evtx (69,632 bytes)
+        System.evtx.bak (69,632 bytes)
