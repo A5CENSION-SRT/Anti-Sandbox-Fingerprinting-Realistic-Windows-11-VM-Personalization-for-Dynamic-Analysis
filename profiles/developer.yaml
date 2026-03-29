@@ -4,6 +4,9 @@ installed_apps:
   - docker
   - git
   - terminal
+  - outlook
+  - teams
+  - chrome
 browsing:
   categories:
     - stackoverflow

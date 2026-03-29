@@ -4,6 +4,7 @@ installed_apps:
   - teams
   - excel
   - word
+  - chrome
 browsing:
   categories:
     - business

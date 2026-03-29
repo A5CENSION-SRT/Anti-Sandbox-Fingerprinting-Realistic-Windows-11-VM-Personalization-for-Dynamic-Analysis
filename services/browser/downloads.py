@@ -58,7 +58,7 @@ class BrowserDownloadService(BaseService):
         return "BrowserDownloads"
 
     def apply(self, context: dict) -> None:
-        profile = context.get("profile_name", self._profile)
+        profile = context.get("profile_type", context.get("profile_name", self._profile))
         user = context.get("username", self._username)
         count = context.get("download_count", self._count)
         timeline_days = context.get("timeline_days", 90)

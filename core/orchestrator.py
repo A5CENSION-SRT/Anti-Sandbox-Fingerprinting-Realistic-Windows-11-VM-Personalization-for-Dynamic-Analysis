@@ -343,9 +343,12 @@ class Orchestrator:
             install_time = install_date
 
             # Build execution context
+            # identity values (generated username, etc.) take precedence
+            # over profile values (which may contain placeholders like
+            # "default_user").
             self._context = {
-                **identity,
                 **profile,
+                **identity,
                 "config": self._config,
                 "dry_run": self._dry_run,
                 "timeline_days": timeline_days,
