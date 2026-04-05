@@ -411,6 +411,7 @@ class UserAssist(BaseService):
 
         Args:
             profile_type: One of ``"home"``, ``"office"``, ``"developer"``.
+                ``*_user`` aliases are accepted and normalized.
 
         Returns:
             List of program execution metadata dicts.
@@ -418,7 +419,8 @@ class UserAssist(BaseService):
         Raises:
             UserAssistError: If profile type is unknown.
         """
-        programs = _PROFILE_PROGRAMS_MAP.get(profile_type.lower())
+        profile_key = profile_type.lower().removesuffix("_user")
+        programs = _PROFILE_PROGRAMS_MAP.get(profile_key)
         if programs is None:
             valid = ", ".join(sorted(_PROFILE_PROGRAMS_MAP.keys()))
             raise UserAssistError(

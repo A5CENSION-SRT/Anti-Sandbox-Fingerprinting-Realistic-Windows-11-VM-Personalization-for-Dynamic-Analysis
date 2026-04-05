@@ -13,6 +13,8 @@ The .lnk format is a Windows Shell Link binary format containing:
 from __future__ import annotations
 
 import logging
+import os
+import platform
 import struct
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +23,16 @@ from typing import Any, Dict, List, Tuple
 from uuid import UUID
 
 from services.base_service import BaseService
+
+# Windows file time APIs for setting creation time
+try:
+    import pywintypes
+    import win32con
+    import win32file
+
+    _HAS_WIN32 = True
+except ImportError:
+    _HAS_WIN32 = False
 
 logger = logging.getLogger(__name__)
 
@@ -204,18 +216,63 @@ class RecentItemsService(BaseService):
                 f"Recent Items generation failed: {exc}"
             ) from exc
 
-    def _write_file(self, rel_path: Path, content: bytes) -> None:
-        """Write file content to the mounted filesystem."""
+    def _write_file(
+        self,
+        rel_path: Path,
+        content: bytes,
+        event_type: str = "recent",
+    ) -> None:
+        """Write file content to the mounted filesystem and apply timestamps.
+
+        Args:
+            rel_path: Path relative to mount root.
+            content: Binary content to write.
+            event_type: Event type for timestamp generation.
+        """
         full_path = self._mount.resolve(str(rel_path))
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(content)
+
+        # Apply realistic timestamps from the timeline
+        self._apply_timestamps(full_path, event_type)
 
         self._audit.log({
             "service": self.service_name,
             "operation": "create_file",
             "path": str(full_path),
             "size": len(content),
+            "timestamp_event": event_type,
         })
+
+    def _apply_timestamps(self, path: Path, event_type: str) -> None:
+        """Apply created/modified/accessed timestamps from the timestamp service.
+
+        Args:
+            path: Absolute path to the file.
+            event_type: Event type for timestamp generation.
+        """
+        timestamps = self._ts.get_timestamp(event_type)
+
+        accessed = timestamps["accessed"].timestamp()
+        modified = timestamps["modified"].timestamp()
+        os.utime(str(path), (accessed, modified))
+
+        # Creation time requires pywin32 on Windows
+        if _HAS_WIN32 and platform.system() == "Windows":
+            created = pywintypes.Time(timestamps["created"])
+            handle = win32file.CreateFile(
+                str(path),
+                win32con.GENERIC_WRITE,
+                win32con.FILE_SHARE_WRITE,
+                None,
+                win32con.OPEN_EXISTING,
+                win32con.FILE_ATTRIBUTE_NORMAL,
+                None,
+            )
+            try:
+                win32file.SetFileTime(handle, created, None, None)
+            finally:
+                handle.Close()
 
     def _create_lnk_file(
         self,
@@ -366,6 +423,7 @@ class RecentItemsService(BaseService):
         ]
 
         full_dest_dir = self._mount.resolve(str(dest_dir))
+        full_dest_dir.mkdir(parents=True, exist_ok=True)
 
         for app_id in app_ids:
             if rng.random() < 0.3:  # Skip some
@@ -377,6 +435,9 @@ class RecentItemsService(BaseService):
             # Create minimal compound file structure
             content = self._create_minimal_jump_list(rng)
             file_path.write_bytes(content)
+
+            # Apply realistic timestamps
+            self._apply_timestamps(file_path, "recent")
 
             self._audit.log({
                 "service": self.service_name,
