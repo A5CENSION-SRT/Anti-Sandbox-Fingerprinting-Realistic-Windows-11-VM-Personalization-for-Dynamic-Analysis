@@ -424,6 +424,7 @@ class NetworkProfiles(BaseService):
 
         Args:
             profile_type: One of ``"home"``, ``"office"``, ``"developer"``.
+                ``*_user`` aliases are accepted and normalized.
 
         Returns:
             List of network definition dicts.
@@ -431,7 +432,8 @@ class NetworkProfiles(BaseService):
         Raises:
             NetworkProfilesError: If profile type is unknown.
         """
-        networks = _PROFILE_NETWORK_MAP.get(profile_type.lower())
+        profile_key = profile_type.lower().removesuffix("_user")
+        networks = _PROFILE_NETWORK_MAP.get(profile_key)
         if networks is None:
             valid = ", ".join(sorted(_PROFILE_NETWORK_MAP.keys()))
             raise NetworkProfilesError(

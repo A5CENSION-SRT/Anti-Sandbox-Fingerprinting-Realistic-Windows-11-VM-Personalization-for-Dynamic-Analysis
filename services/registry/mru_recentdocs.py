@@ -317,6 +317,7 @@ class MruRecentDocs(BaseService):
 
         Args:
             profile_type: One of ``"home"``, ``"office"``, ``"developer"``.
+                ``*_user`` aliases are accepted and normalized.
 
         Returns:
             Ordered list of filenames.
@@ -324,7 +325,8 @@ class MruRecentDocs(BaseService):
         Raises:
             MruRecentDocsError: If profile type is unknown.
         """
-        docs = _PROFILE_DOCS_MAP.get(profile_type.lower())
+        profile_key = profile_type.lower().removesuffix("_user")
+        docs = _PROFILE_DOCS_MAP.get(profile_key)
         if docs is None:
             valid = ", ".join(sorted(_PROFILE_DOCS_MAP.keys()))
             raise MruRecentDocsError(
