@@ -13,6 +13,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type, TypeVar
@@ -262,6 +263,323 @@ class GeminiClient:
         self._genai = genai
         self._gen_model = genai.GenerativeModel(self._model)
         logger.info("Initialized Gemini client with model: %s", self._model)
+
+    @staticmethod
+    def _to_string_list(value: Any) -> List[str]:
+        """Convert mixed input into a clean list of non-empty strings."""
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        if isinstance(value, str) and value.strip():
+            if "," in value:
+                return [part.strip() for part in value.split(",") if part.strip()]
+            return [value.strip()]
+        return []
+
+    @staticmethod
+    def _dedupe_strings(values: List[str]) -> List[str]:
+        """Return case-insensitive de-duplicated values preserving order."""
+        deduped: List[str] = []
+        seen: set[str] = set()
+        for value in values:
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append(value)
+        return deduped
+
+    @staticmethod
+    def _build_username(full_name: str) -> str:
+        """Derive a schema-compatible username from full name."""
+        parts = [
+            re.sub(r"[^a-z0-9]", "", part.lower())
+            for part in full_name.split()
+            if part.strip()
+        ]
+        parts = [p for p in parts if p]
+        if len(parts) >= 2:
+            username = f"{parts[0]}.{parts[-1]}"
+        elif parts:
+            username = parts[0]
+        else:
+            username = "alex.user"
+
+        if not username or not username[0].isalpha():
+            username = f"u{username}" if username else "user.account"
+
+        return username[:20]
+
+    @staticmethod
+    def _build_domain(organization: str) -> str:
+        """Build a plausible email domain from organization name."""
+        if organization.strip().lower() == "personal":
+            return "gmail.com"
+        cleaned = re.sub(r"[^a-z0-9]", "", organization.lower())
+        if not cleaned:
+            cleaned = "company"
+        return f"{cleaned[:16]}.com"
+
+    @staticmethod
+    def _normalize_tech_proficiency(value: Any) -> str:
+        """Map free-form proficiency values to schema enum values."""
+        text = str(value or "intermediate").strip().lower()
+        if any(k in text for k in ("expert", "advanced", "high", "pro", "senior")):
+            return "high"
+        if any(k in text for k in ("beginner", "basic", "low", "novice")):
+            return "low"
+        return "intermediate"
+
+    def _normalize_persona_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize common alternate persona JSON shapes to PersonaContext."""
+        data: Dict[str, Any] = dict(payload)
+
+        # Handle wrapped outputs like {"persona": {...}}
+        nested = data.get("persona")
+        if isinstance(nested, dict):
+            merged = dict(nested)
+            for key, value in data.items():
+                if key != "persona" and key not in merged:
+                    merged[key] = value
+            data = merged
+
+        def pick(*keys: str, default: Any = None) -> Any:
+            for key in keys:
+                if key in data and data[key] not in (None, "", []):
+                    return data[key]
+            return default
+
+        full_name = str(pick("full_name", "name", default="Alex Johnson"))
+        occupation = str(pick("occupation", "role", "job_title", default="Office Worker"))
+        organization = str(pick("organization", "company", "employer", default="Personal"))
+        if not organization.strip():
+            organization = "Personal"
+
+        username = str(pick("username", default="")).strip() or self._build_username(full_name)
+        email = str(pick("email", default="")).strip()
+        if not email:
+            email = f"{username}@{self._build_domain(organization)}"
+
+        age_range_value = pick("age_range")
+        if age_range_value:
+            nums = [int(n) for n in re.findall(r"\d+", str(age_range_value))]
+            if len(nums) >= 2:
+                age_range = f"{nums[0]:02d}-{nums[1]:02d}"
+            elif len(nums) == 1:
+                low = max(18, nums[0] - 4)
+                high = min(75, nums[0] + 3)
+                age_range = f"{low:02d}-{high:02d}"
+            else:
+                age_range = "28-35"
+        else:
+            age_raw = pick("age")
+            if isinstance(age_raw, (int, float)):
+                low = max(18, int(age_raw) - 4)
+                high = min(75, int(age_raw) + 3)
+                age_range = f"{low:02d}-{high:02d}"
+            else:
+                age_range = "28-35"
+
+        interests_raw = pick("interests", default={})
+        if isinstance(interests_raw, dict):
+            hobbies = self._to_string_list(interests_raw.get("hobbies"))
+            professional_topics = self._to_string_list(interests_raw.get("professional_topics"))
+            entertainment = self._to_string_list(interests_raw.get("entertainment"))
+        elif isinstance(interests_raw, list):
+            hobbies = self._to_string_list(interests_raw)
+            professional_topics = []
+            entertainment = []
+        else:
+            hobbies = []
+            professional_topics = []
+            entertainment = []
+
+        hobbies = self._dedupe_strings(hobbies)
+        professional_topics = self._dedupe_strings(professional_topics)
+        entertainment = self._dedupe_strings(entertainment)
+
+        hobby_fallback = ["reading", "fitness", "technology"]
+        topic_fallback = ["productivity", "industry trends"]
+
+        for fallback in hobby_fallback:
+            if len(hobbies) >= 3:
+                break
+            if fallback.lower() not in {h.lower() for h in hobbies}:
+                hobbies.append(fallback)
+
+        for fallback in topic_fallback:
+            if len(professional_topics) >= 2:
+                break
+            if fallback.lower() not in {p.lower() for p in professional_topics}:
+                professional_topics.append(fallback)
+
+        work_style_raw = pick("work_style", default={})
+        usage_patterns = pick("usage_patterns", default={})
+        tech_stack = pick("tech_stack", default={})
+
+        if isinstance(work_style_raw, dict):
+            work_description = str(
+                work_style_raw.get("description")
+                or pick("persona_summary", default=f"{occupation} with a practical workflow")
+            )
+            typical_tools = self._to_string_list(work_style_raw.get("typical_tools"))
+            collaboration_style = str(work_style_raw.get("collaboration_style", "hybrid")).lower()
+            meeting_frequency = str(work_style_raw.get("meeting_frequency", "moderate")).lower()
+        else:
+            work_description = str(pick("persona_summary", default=f"{occupation} with a practical workflow"))
+            typical_tools = []
+            collaboration_style = "hybrid"
+            meeting_frequency = "moderate"
+
+        if isinstance(tech_stack, dict):
+            for key in ("tools", "software", "apps"):
+                typical_tools.extend(self._to_string_list(tech_stack.get(key)))
+
+        if isinstance(usage_patterns, dict):
+            typical_tools.extend(self._to_string_list(usage_patterns.get("tools")))
+
+        if not typical_tools:
+            occupation_lower = occupation.lower()
+            if any(k in occupation_lower for k in ("developer", "engineer", "programmer", "devops")):
+                typical_tools = ["VS Code", "Git", "Docker", "Terminal"]
+            elif any(k in occupation_lower for k in ("manager", "marketing", "sales", "analyst")):
+                typical_tools = ["Outlook", "Excel", "Teams", "PowerPoint"]
+            else:
+                typical_tools = ["Chrome", "Notepad", "File Explorer"]
+
+        typical_tools = self._dedupe_strings(typical_tools)[:8]
+
+        projects_raw = pick("project_names", "projects", default=[])
+        if isinstance(projects_raw, dict):
+            project_names = self._to_string_list(list(projects_raw.keys()))
+        else:
+            project_names = self._to_string_list(projects_raw)
+        project_defaults = ["Platform Upgrade", "Q4 Initiative", "Process Automation"]
+        for default_project in project_defaults:
+            if len(project_names) >= 3:
+                break
+            if default_project.lower() not in {p.lower() for p in project_names}:
+                project_names.append(default_project)
+
+        colleagues_raw = pick("colleague_names", "coworkers", "team_members", default=[])
+        if isinstance(colleagues_raw, dict):
+            colleague_names = self._to_string_list(list(colleagues_raw.keys()))
+        else:
+            colleague_names = self._to_string_list(colleagues_raw)
+        colleague_defaults = [
+            "Taylor Reed",
+            "Morgan Patel",
+            "Casey Nguyen",
+            "Jordan Lee",
+            "Sam Wilson",
+        ]
+        for fallback_name in colleague_defaults:
+            if len(colleague_names) >= 5:
+                break
+            if fallback_name.lower() not in {c.lower() for c in colleague_names}:
+                colleague_names.append(fallback_name)
+
+        tech_proficiency = self._normalize_tech_proficiency(
+            pick("tech_proficiency", "technical_proficiency", default="intermediate")
+        )
+
+        work_hours_start = pick("work_hours_start", default=9)
+        work_hours_end = pick("work_hours_end", default=17)
+        try:
+            work_hours_start = max(0, min(23, int(work_hours_start)))
+        except (TypeError, ValueError):
+            work_hours_start = 9
+        try:
+            work_hours_end = max(0, min(23, int(work_hours_end)))
+        except (TypeError, ValueError):
+            work_hours_end = 17
+        if work_hours_end <= work_hours_start:
+            work_hours_end = min(23, work_hours_start + 8)
+
+        active_days_raw = pick("active_days")
+        active_days: List[int] = []
+        if isinstance(active_days_raw, list):
+            for day in active_days_raw:
+                try:
+                    day_int = int(day)
+                except (TypeError, ValueError):
+                    continue
+                if 1 <= day_int <= 7:
+                    active_days.append(day_int)
+        if not active_days:
+            active_days = [1, 2, 3, 4, 5]
+
+        return {
+            "full_name": full_name,
+            "username": username,
+            "email": email,
+            "organization": organization,
+            "occupation": occupation,
+            "department": pick("department", "team"),
+            "age_range": age_range,
+            "locale": str(pick("locale", default="en_US")),
+            "location": pick("location", "city"),
+            "tech_proficiency": tech_proficiency,
+            "interests": {
+                "hobbies": hobbies[:10],
+                "professional_topics": professional_topics[:8],
+                "entertainment": entertainment[:8],
+            },
+            "work_style": {
+                "description": work_description,
+                "typical_tools": typical_tools,
+                "collaboration_style": collaboration_style,
+                "meeting_frequency": meeting_frequency,
+            },
+            "project_names": self._dedupe_strings(project_names)[:15],
+            "colleague_names": self._dedupe_strings(colleague_names)[:20],
+            "work_hours_start": work_hours_start,
+            "work_hours_end": work_hours_end,
+            "active_days": active_days,
+        }
+
+    def _normalize_list_item_payload(self, payload: Any, item_schema: Type[T]) -> Any:
+        """Normalize list item payload for common schema mismatches."""
+        if not isinstance(payload, dict):
+            return payload
+
+        item: Dict[str, Any] = dict(payload)
+        fields = item_schema.model_fields
+
+        if "context" in fields and not item.get("context"):
+            context_source = (
+                item.get("content_theme")
+                or item.get("filename_pattern")
+                or item.get("pattern")
+                or item.get("url_template")
+            )
+            item["context"] = str(context_source) if context_source else f"{item_schema.__name__} generated by AI"
+
+        if "expansion" in fields:
+            expansion_raw = item.get("expansion")
+            if not isinstance(expansion_raw, dict):
+                expansion_raw = {}
+
+            def _as_int(value: Any, default: int) -> int:
+                try:
+                    return int(value)
+                except (TypeError, ValueError):
+                    return default
+
+            expansion = {
+                "target_count": max(1, min(_as_int(expansion_raw.get("target_count"), 50), 1000)),
+                "date_range_days": max(1, min(_as_int(expansion_raw.get("date_range_days"), 90), 365)),
+                "include_versions": bool(expansion_raw.get("include_versions", True)),
+                "include_drafts": bool(expansion_raw.get("include_drafts", True)),
+                "include_dates": bool(expansion_raw.get("include_dates", True)),
+            }
+            item["expansion"] = expansion
+
+        if item_schema.__name__ == "DocumentSeed" and not item.get("document_type"):
+            pattern = str(item.get("filename_pattern", "")).strip()
+            extension = pattern.rsplit(".", 1)[-1].lower() if "." in pattern else "docx"
+            item["document_type"] = extension
+
+        return item
     
     def generate(
         self,
@@ -409,6 +727,23 @@ class GeminiClient:
         """
         data = self.generate_json(prompt, temperature, use_cache)
         
+        # Unwrap nested wrapper if present (e.g., {"persona": {...}})
+        if isinstance(data, dict) and len(data) == 1:
+            key = list(data.keys())[0]
+            if isinstance(data[key], dict) and key.lower() in schema.__name__.lower():
+                data = data[key]
+
+        if schema.__name__ == "PersonaContext" and isinstance(data, dict):
+            data = self._normalize_persona_payload(data)
+
+        if isinstance(data, dict) and "expansion" in schema.model_fields:
+            expansion = data.get("expansion")
+            if isinstance(expansion, dict):
+                target_count = expansion.get("target_count")
+                if isinstance(target_count, (int, float)):
+                    expansion["target_count"] = max(1, min(int(target_count), 1000))
+                data["expansion"] = expansion
+        
         try:
             return schema.model_validate(data)
         except ValidationError as e:
@@ -449,9 +784,14 @@ class GeminiClient:
             raise GeminiParseError(
                 f"Expected JSON array, got {type(data).__name__}"
             )
+
+        normalized_data = [
+            self._normalize_list_item_payload(item, item_schema)
+            for item in data
+        ]
         
         try:
-            return [item_schema.model_validate(item) for item in data]
+            return [item_schema.model_validate(item) for item in normalized_data]
         except ValidationError as e:
             raise GeminiParseError(
                 f"Item doesn't match schema {item_schema.__name__}: {e}"

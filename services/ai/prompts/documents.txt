@@ -15,6 +15,7 @@ Output ONLY a JSON array of document seeds:
 [
   {{
     "seed_id": "doc_001",
+    "context": "Weekly reporting workflow for active projects",
     "filename_pattern": "{{project}}_Status_Report_{{date}}.docx",
     "document_type": "docx",
     "category": "work",
@@ -65,6 +66,7 @@ Include a diverse mix across categories:
    - For hobbyists: project notes, guides
 
 For each seed, provide:
+- **context**: Short explanation of why this document exists in the user's workflow
 - **filename_pattern**: Use {{variable}} syntax
 - **document_type**: docx, xlsx, pdf, txt, md, json
 - **category**: work, personal, financial, creative, technical

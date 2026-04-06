@@ -119,7 +119,21 @@ class ProfileEngine:
         logger.info("Loading profile: %s", name)
         resolved = self._resolve_inheritance(name, frozenset())
         resolved.pop("extends", None)
-        context = ProfileContext(**resolved)
+
+        # AI-generated profiles may include additional metadata keys
+        # (e.g., _ai_metadata, _persona_interests, _seeds). Keep strict
+        # validation for runtime fields while ignoring non-runtime extras.
+        allowed_fields = set(ProfileContext.model_fields.keys())
+        filtered = {k: v for k, v in resolved.items() if k in allowed_fields}
+        dropped = [k for k in resolved.keys() if k not in allowed_fields]
+        if dropped:
+            logger.debug(
+                "Ignoring non-runtime profile keys for %s: %s",
+                name,
+                ", ".join(sorted(dropped)),
+            )
+
+        context = ProfileContext(**filtered)
         logger.info("Profile loaded successfully: %s", name)
         return context
 

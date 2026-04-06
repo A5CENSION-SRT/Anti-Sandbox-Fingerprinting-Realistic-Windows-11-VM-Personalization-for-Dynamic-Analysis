@@ -1,0 +1,87 @@
+extends: developer
+username: jordan.chen
+organization: TechStart Inc.
+locale: en_US
+installed_apps:
+  - vscode
+  - docker
+  - git
+  - terminal
+  - postman
+  - steam
+  - discord
+browsing:
+  categories:
+    - documentation
+    - stackoverflow
+    - github
+    - entertainment
+  daily_avg_sites: 33
+work_hours:
+  start: 10
+  end: 19
+  active_days:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+_ai_metadata:
+  generated_at: '2026-04-06T18:11:07.849792'
+  full_name: Jordan Chen
+  email: jordan.chen@techstartinc.com
+  occupation: Senior Software Engineer
+  department:
+  age_range: 28-42
+  location: United States
+  tech_proficiency: high
+  project_names:
+    - API Gateway
+    - Auth Service
+    - Data Pipeline
+    - Mobile App
+    - General Tasks
+    - Admin
+    - Planning
+  colleague_names:
+    - John Smith
+    - Emily Davis
+    - Michael Brown
+    - Jessica Wilson
+    - David Lee
+    - Amanda Garcia
+    - Chris Martinez
+    - Rachel Taylor
+    - Kevin Anderson
+    - Lisa Thomas
+_persona_interests:
+  hobbies:
+    - open source
+    - gaming
+    - 3D printing
+    - home automation
+  professional_topics:
+    - cloud architecture
+    - machine learning
+    - devops
+  entertainment:
+    - tech podcasts
+    - sci-fi
+    - strategy games
+_work_style:
+  description: Balanced work style with regular hours
+  typical_tools:
+    - VS Code
+    - Docker
+    - Git
+    - Terminal
+    - Postman
+  collaboration_style: hybrid
+  meeting_frequency: moderate
+_seeds:
+  total_seed_count: 32
+  generated_at: '2026-04-06T18:11:07.849792'
+  gemini_model: gemini-3.1-flash-lite-preview
+  download_count: 3
+  document_count: 2
+  media_count: 0

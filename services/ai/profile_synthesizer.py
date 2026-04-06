@@ -334,6 +334,9 @@ class ProfileSynthesizer:
             "gemini_model": seeds.gemini_model,
             "download_count": len(seeds.downloads),
             "document_count": len(seeds.documents),
+            "browsing_url_count": len(seeds.browsing.url_patterns) if seeds.browsing else 0,
+            "browsing_search_theme_count": len(seeds.browsing.search_term_themes) if seeds.browsing else 0,
+            "filename_pattern_count": len(seeds.filename_patterns),
             "media_count": len(seeds.media),
             # Full seed data stored separately or computed on demand
         }

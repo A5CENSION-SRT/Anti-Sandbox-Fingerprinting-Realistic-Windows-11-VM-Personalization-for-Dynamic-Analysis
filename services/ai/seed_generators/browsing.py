@@ -143,6 +143,30 @@ class BrowsingSeedGenerator:
                 context="Online shopping",
                 generates_downloads=True,
             ),
+            BrowsingPatternSeed(
+                url="https://www.wikipedia.org/",
+                title="Wikipedia",
+                frequency=VisitFrequency.WEEKLY,
+                typical_times=["13:00-14:00", "20:00-21:00"],
+                context="General reference and quick lookups",
+                generates_downloads=False,
+            ),
+            BrowsingPatternSeed(
+                url="https://www.weather.com/",
+                title="The Weather Channel",
+                frequency=VisitFrequency.DAILY,
+                typical_times=["07:00-08:00"],
+                context="Daily weather checks",
+                generates_downloads=False,
+            ),
+            BrowsingPatternSeed(
+                url="https://www.google.com/maps",
+                title="Google Maps",
+                frequency=VisitFrequency.WEEKLY,
+                typical_times=["08:00-09:00", "17:00-18:00"],
+                context="Route planning and local search",
+                generates_downloads=False,
+            ),
         ]
         
         profile_urls = {
@@ -233,6 +257,11 @@ class BrowsingSeedGenerator:
                 "best practices for {topic}",
                 "{library} documentation",
                 "git {command} tutorial",
+                "docker {task} example",
+                "kubernetes {topic} guide",
+                "postgresql {query_type} query",
+                "windows terminal {task}",
+                "vscode {feature} settings",
             ],
             "office_user": [
                 "excel {function} formula",
@@ -240,6 +269,11 @@ class BrowsingSeedGenerator:
                 "{industry} trends 2024",
                 "best {tool} alternatives",
                 "project management {topic}",
+                "powerpoint {task} tips",
+                "outlook {task} help",
+                "meeting agenda template",
+                "quarterly report {topic}",
+                "business writing examples",
             ],
             "home_user": [
                 "{product} reviews",
@@ -247,6 +281,11 @@ class BrowsingSeedGenerator:
                 "{recipe} recipe easy",
                 "{destination} travel tips",
                 "how to {task} at home",
+                "streaming shows recommendations",
+                "{device} troubleshooting",
+                "weeknight dinner ideas",
+                "budget planner template",
+                "nearby activities this weekend",
             ],
         }
         
@@ -274,7 +313,7 @@ class BrowsingSeedGenerator:
             seed_id="browsing_fallback",
             context=f"Fallback browsing patterns for {profile_type}",
             expansion=ExpansionRule(
-                target_count=self._total_target,
+                target_count=min(self._total_target, 1000),
                 date_range_days=90,
             ),
             url_patterns=urls,

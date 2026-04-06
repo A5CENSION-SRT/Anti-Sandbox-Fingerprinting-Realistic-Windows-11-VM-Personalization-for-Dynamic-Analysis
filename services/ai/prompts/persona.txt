@@ -54,3 +54,8 @@ Requirements:
 11. **Work Hours**: Appropriate for the role and culture
 
 Make all elements internally consistent - a marketing manager's hobbies, tools, and projects should all feel coherent.
+
+Important:
+- Do NOT use alternate key names like name, role, age, technical_proficiency, or persona_summary.
+- Use ONLY the exact keys shown in the JSON schema above.
+- Output raw JSON only (no markdown fences, no commentary).

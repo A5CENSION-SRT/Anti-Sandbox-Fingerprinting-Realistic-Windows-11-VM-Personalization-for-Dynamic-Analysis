@@ -149,6 +149,16 @@ class IdentityGenerator:
             user_update = {}
             if override_username:
                 user_update["username"] = override_username
+                # Keep email in sync with forced username.
+                if "@" in user.email:
+                    email_domain = user.email.split("@", 1)[1]
+                else:
+                    email_domain = self._normalize_org_domain(user.organization)
+                user_update["email"] = f"{override_username}@{email_domain}"
+
+                # If hostname is not explicitly forced, regenerate from username.
+                if not override_hostname:
+                    user_update["computer_name"] = self._generate_computer_name(override_username)
             if override_hostname:
                 user_update["computer_name"] = override_hostname
             user = user.model_copy(update=user_update)

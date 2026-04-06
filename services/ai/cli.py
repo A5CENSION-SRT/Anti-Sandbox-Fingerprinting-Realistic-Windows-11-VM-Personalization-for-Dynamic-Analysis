@@ -288,8 +288,8 @@ def cmd_expand(args: argparse.Namespace) -> int:
     
     print(f"\n  Download seeds: {len(seeds.downloads)}")
     print(f"  Document seeds: {len(seeds.documents)}")
-    print(f"  Browsing seeds: {len(seeds.browsing)}")
-    print(f"  Filename seeds: {len(seeds.filenames)}")
+    print(f"  Browsing seeds: {len(seeds.browsing.url_patterns) if seeds.browsing else 0}")
+    print(f"  Filename seeds: {len(seeds.filename_patterns)}")
     
     # Expand downloads
     if seeds.downloads:

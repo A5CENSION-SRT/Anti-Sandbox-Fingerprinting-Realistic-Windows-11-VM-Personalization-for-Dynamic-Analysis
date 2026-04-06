@@ -84,34 +84,65 @@ class AIGenerationConfig:
     
     @classmethod
     def from_config(cls, config: Dict[str, Any]) -> "AIGenerationConfig":
-        """Create from main config.yaml dictionary."""
+        """Create from main config.yaml dictionary with environment variable overrides."""
+        import os
         ai_config = config.get("ai", {})
         gemini_config = ai_config.get("gemini", {})
         scale_config = config.get("artifact_scale", {})
+
+        downloads_cfg = scale_config.get("downloads", {})
+        documents_cfg = scale_config.get("documents", {})
+        media_cfg = scale_config.get("media", {})
+        pictures_cfg = scale_config.get("pictures", {})
+        videos_cfg = scale_config.get("videos", {})
+        music_cfg = scale_config.get("music", {})
+        browsing_cfg = scale_config.get("browsing", {})
+        browser_history_cfg = scale_config.get("browser_history", {})
+        search_terms_cfg = scale_config.get("search_terms", {})
+        bookmarks_cfg = scale_config.get("bookmarks", {})
+        filenames_cfg = scale_config.get("filenames", {})
+
+        cache_cfg = ai_config.get("cache", {})
+        cache_enabled = ai_config.get("cache_responses", cache_cfg.get("enabled", True))
+        cache_dir_value = ai_config.get("cache_dir", cache_cfg.get("directory", ".ai_cache"))
+        cache_ttl_hours = ai_config.get("cache_ttl_hours", cache_cfg.get("ttl_hours", 24))
         
+        # Priority: Environment Var > config.yaml > Default
+        api_key = os.environ.get("GEMINI_API_KEY") or gemini_config.get("api_key")
+        model = os.environ.get("GEMINI_MODEL") or gemini_config.get("model", "gemini-2.0-flash")
+        
+        # Log which model is being used
+        logger.info("Initializing AI generation with model: %s", model)
+        
+        try:
+            temp_env = os.environ.get("GEMINI_TEMPERATURE")
+            temperature = float(temp_env) if temp_env else gemini_config.get("temperature", 0.7)
+        except ValueError:
+            temperature = gemini_config.get("temperature", 0.7)
+
         return cls(
-            api_key=gemini_config.get("api_key"),
-            model=gemini_config.get("model", "gemini-2.0-flash"),
-            temperature=gemini_config.get("temperature", 0.7),
-            seed_count_downloads=scale_config.get("downloads", {}).get("seeds", 20),
-            seed_count_documents=scale_config.get("documents", {}).get("seeds", 30),
-            seed_count_browsing_urls=scale_config.get("browsing", {}).get("url_seeds", 50),
-            seed_count_browsing_search=scale_config.get("browsing", {}).get("search_seeds", 30),
-            seed_count_browsing_bookmarks=scale_config.get("browsing", {}).get("bookmark_seeds", 20),
-            seed_count_media=scale_config.get("media", {}).get("seeds", 15),
-            seed_count_filenames=scale_config.get("filenames", {}).get("seeds", 15),
-            target_downloads=scale_config.get("downloads", {}).get("target", 1500),
-            target_documents=scale_config.get("documents", {}).get("target", 4500),
-            target_pictures=scale_config.get("media", {}).get("pictures_target", 750),
-            target_videos=scale_config.get("media", {}).get("videos_target", 240),
-            target_music=scale_config.get("media", {}).get("music_target", 500),
-            target_history_entries=scale_config.get("browsing", {}).get("history_target", 7500),
-            target_search_terms=scale_config.get("browsing", {}).get("search_target", 1500),
-            target_bookmarks=scale_config.get("browsing", {}).get("bookmarks_target", 200),
+            api_key=api_key,
+            model=model,
+            temperature=temperature,
+            seed_count_downloads=downloads_cfg.get("seeds", 20),
+            seed_count_documents=documents_cfg.get("seeds", 30),
+            seed_count_browsing_urls=browsing_cfg.get("url_seeds", browser_history_cfg.get("seeds", 50)),
+            seed_count_browsing_search=browsing_cfg.get("search_seeds", search_terms_cfg.get("seeds", 30)),
+            seed_count_browsing_bookmarks=browsing_cfg.get("bookmark_seeds", bookmarks_cfg.get("seeds", 20)),
+            seed_count_media=media_cfg.get("seeds", 15),
+            seed_count_filenames=filenames_cfg.get("seeds", 15),
+            target_downloads=downloads_cfg.get("target", downloads_cfg.get("target_total", 1500)),
+            target_documents=documents_cfg.get("target", documents_cfg.get("target_total", 4500)),
+            target_pictures=media_cfg.get("pictures_target", pictures_cfg.get("target_total", 750)),
+            target_videos=media_cfg.get("videos_target", videos_cfg.get("target_total", 240)),
+            target_music=media_cfg.get("music_target", music_cfg.get("target_total", 500)),
+            target_history_entries=browsing_cfg.get("history_target", browser_history_cfg.get("target_total", 7500)),
+            target_search_terms=browsing_cfg.get("search_target", search_terms_cfg.get("target_total", 1500)),
+            target_bookmarks=browsing_cfg.get("bookmarks_target", bookmarks_cfg.get("target_total", 200)),
             timeline_days=config.get("timeline_days", 90),
-            cache_enabled=ai_config.get("cache_responses", True),
-            cache_dir=Path(ai_config.get("cache_dir", ".ai_cache")) if ai_config.get("cache_dir") else None,
-            cache_ttl_hours=ai_config.get("cache_ttl_hours", 24),
+            cache_enabled=cache_enabled,
+            cache_dir=Path(cache_dir_value) if cache_enabled and cache_dir_value else None,
+            cache_ttl_hours=cache_ttl_hours,
             fallback_enabled=ai_config.get("fallback", {}).get("enabled", True),
         )
 
@@ -290,78 +321,87 @@ class AIOrchestrator:
             Tuple of (ProfileSeeds, used_fallback).
         """
         used_fallback = False
-        seeds_dict: Dict[str, Any] = {
-            "persona_id": f"persona_{persona.username}",
-            "downloads": [],
-            "documents": [],
-            "browsing": [],
-            "media": [],
-            "filenames": [],
-        }
+        downloads: List[DownloadSeed] = []
+        documents: List[DocumentSeed] = []
+        browsing: Optional[BrowsingSeed] = None
+        filename_patterns: List[FilenameSeed] = []
+        media: List[MediaSeed] = []
         
         # Generate each seed type
+        dl_gen: Optional[DownloadSeedGenerator] = None
         try:
             dl_gen = DownloadSeedGenerator(
                 client=self._client,
                 seed_count=self._config.seed_count_downloads,
                 total_target=self._config.target_downloads,
             )
-            seeds_dict["downloads"] = dl_gen.generate(persona)
+            downloads = dl_gen.generate(persona)
         except Exception as e:
             logger.warning("Download seed generation failed: %s", e)
             if self._config.fallback_enabled:
-                seeds_dict["downloads"] = dl_gen._generate_fallback_seeds(persona)
+                if dl_gen is not None:
+                    downloads = dl_gen._generate_fallback_seeds(persona)
+                else:
+                    logger.warning("Download generator unavailable; using empty download seeds")
                 used_fallback = True
             
+        doc_gen: Optional[DocumentSeedGenerator] = None
         try:
             doc_gen = DocumentSeedGenerator(
                 client=self._client,
                 seed_count=self._config.seed_count_documents,
                 total_target=self._config.target_documents,
             )
-            seeds_dict["documents"] = doc_gen.generate(persona)
+            documents = doc_gen.generate(persona)
         except Exception as e:
             logger.warning("Document seed generation failed: %s", e)
             if self._config.fallback_enabled:
-                seeds_dict["documents"] = doc_gen._generate_fallback_seeds(persona)
+                if doc_gen is not None:
+                    documents = doc_gen._generate_fallback_seeds(persona)
+                else:
+                    logger.warning("Document generator unavailable; using empty document seeds")
                 used_fallback = True
                 
+        browse_gen: Optional[BrowsingSeedGenerator] = None
         try:
             browse_gen = BrowsingSeedGenerator(
                 client=self._client,
-                url_count=self._config.seed_count_browsing_urls,
-                search_count=self._config.seed_count_browsing_search,
-                bookmark_count=self._config.seed_count_browsing_bookmarks,
-                total_history_target=self._config.target_history_entries,
+                total_target=self._config.target_history_entries,
             )
-            seeds_dict["browsing"] = browse_gen.generate(persona)
+            browsing = browse_gen.generate(persona)
         except Exception as e:
             logger.warning("Browsing seed generation failed: %s", e)
             if self._config.fallback_enabled:
-                seeds_dict["browsing"] = browse_gen._generate_fallback_seeds(persona)
+                if browse_gen is not None:
+                    browsing = browse_gen._generate_fallback_seed(persona)
+                else:
+                    logger.warning("Browsing generator unavailable; using no browsing seeds")
                 used_fallback = True
         
+        fname_gen: Optional[FilenameSeedGenerator] = None
         try:
             fname_gen = FilenameSeedGenerator(
                 client=self._client,
                 seed_count=self._config.seed_count_filenames,
             )
-            seeds_dict["filenames"] = fname_gen.generate(persona)
+            filename_patterns = fname_gen.generate(persona)
         except Exception as e:
             logger.warning("Filename seed generation failed: %s", e)
             if self._config.fallback_enabled:
-                seeds_dict["filenames"] = fname_gen._generate_fallback_seeds(persona)
+                if fname_gen is not None:
+                    filename_patterns = fname_gen._generate_fallback_seeds(persona)
+                else:
+                    logger.warning("Filename generator unavailable; using empty filename seeds")
                 used_fallback = True
         
-        # Build ProfileSeeds
-        from services.ai.schemas import ProfileSeeds
         seeds = ProfileSeeds(
-            persona_id=seeds_dict["persona_id"],
-            downloads=seeds_dict["downloads"],
-            documents=seeds_dict["documents"],
-            browsing=seeds_dict["browsing"],
-            media=seeds_dict.get("media", []),
-            filenames=seeds_dict["filenames"],
+            persona=persona,
+            downloads=downloads,
+            documents=documents,
+            browsing=browsing,
+            media=media,
+            filename_patterns=filename_patterns,
+            gemini_model=self._config.model,
         )
         
         return seeds, used_fallback
@@ -465,9 +505,9 @@ class AIOrchestrator:
             expanded_counts = {
                 "downloads": len(seeds.downloads) if seeds.downloads else 0,
                 "documents": len(seeds.documents) if seeds.documents else 0,
-                "browsing": len(seeds.browsing) if seeds.browsing else 0,
+                "browsing": len(seeds.browsing.url_patterns) if seeds.browsing else 0,
                 "media": len(seeds.media) if seeds.media else 0,
-                "filenames": len(seeds.filenames) if seeds.filenames else 0,
+                "filenames": len(seeds.filename_patterns) if seeds.filename_patterns else 0,
             }
         
         elapsed_ms = (time.time() - start) * 1000

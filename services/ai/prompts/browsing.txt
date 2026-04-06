@@ -57,7 +57,7 @@ Output ONLY valid JSON with this structure:
   }},
   "context": "Marketing professional who checks email frequently",
   "expansion": {{
-    "target_count": 7500,
+    "target_count": 1000,
     "date_range_days": 90,
     "include_versions": false,
     "include_drafts": false,

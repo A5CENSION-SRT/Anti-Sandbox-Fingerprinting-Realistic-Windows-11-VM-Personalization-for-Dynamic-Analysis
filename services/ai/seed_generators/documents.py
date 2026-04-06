@@ -103,6 +103,7 @@ class DocumentSeedGenerator:
             "developer": [
                 DocumentSeed(
                     seed_id="doc_dev_001",
+                    context="Core development environment documentation",
                     filename_pattern="{project}_README.md",
                     document_type="md",
                     category=FileCategory.TECHNICAL,
@@ -118,6 +119,7 @@ class DocumentSeedGenerator:
                 ),
                 DocumentSeed(
                     seed_id="doc_dev_002",
+                    context="Internal sprint coordination",
                     filename_pattern="Sprint_{sprint_num}_Notes_{date}.txt",
                     document_type="txt",
                     category=FileCategory.WORK,
@@ -132,6 +134,7 @@ class DocumentSeedGenerator:
             "office_user": [
                 DocumentSeed(
                     seed_id="doc_office_001",
+                    context="Regular project reporting",
                     filename_pattern="{project}_Status_Report_{date}.docx",
                     document_type="docx",
                     category=FileCategory.WORK,
@@ -149,6 +152,7 @@ class DocumentSeedGenerator:
                 ),
                 DocumentSeed(
                     seed_id="doc_office_002",
+                    context="Budgetary coordination",
                     filename_pattern="{department}_Budget_{quarter}_{year}.xlsx",
                     document_type="xlsx",
                     category=FileCategory.FINANCIAL,
@@ -163,6 +167,7 @@ class DocumentSeedGenerator:
                 ),
                 DocumentSeed(
                     seed_id="doc_office_003",
+                    context="Meeting agenda and outcomes",
                     filename_pattern="Meeting_Notes_{topic}_{date}.docx",
                     document_type="docx",
                     category=FileCategory.WORK,
@@ -177,6 +182,7 @@ class DocumentSeedGenerator:
             "home_user": [
                 DocumentSeed(
                     seed_id="doc_home_001",
+                    context="Household management",
                     filename_pattern="Shopping_List_{date}.txt",
                     document_type="txt",
                     category=FileCategory.PERSONAL,
@@ -191,6 +197,7 @@ class DocumentSeedGenerator:
                 ),
                 DocumentSeed(
                     seed_id="doc_home_002",
+                    context="Cooking and hobbies",
                     filename_pattern="Recipe_{dish}.txt",
                     document_type="txt",
                     category=FileCategory.PERSONAL,
@@ -203,6 +210,7 @@ class DocumentSeedGenerator:
                 ),
                 DocumentSeed(
                     seed_id="doc_home_003",
+                    context="Personal finance tracking",
                     filename_pattern="Budget_{month}_{year}.xlsx",
                     document_type="xlsx",
                     category=FileCategory.FINANCIAL,

@@ -283,8 +283,7 @@ def run_ai_generation(
         if not api_key:
             print("⚠️  No Gemini API key found!")
             print("   Set GEMINI_API_KEY environment variable or add to config.yaml")
-            print("   Falling back to static generation...")
-            return None
+            print("   Continuing anyway: fallback generation will be used if enabled.")
         
         orchestrator = AIOrchestrator.from_config(
             config=config,
@@ -360,16 +359,49 @@ def run_artifact_generation(
     
     print_section("Artifact Generation")
     
+    # Build run-specific config so menu-level config is not mutated across runs.
+    run_config = dict(config)
+
     # Update config with profile and mount path
     if profile_path:
-        config["profile_path"] = str(profile_path)
+        resolved_profile = Path(profile_path).resolve()
+        if not resolved_profile.exists():
+            print(f"❌ Profile file not found: {resolved_profile}")
+            return False
+
+        # Orchestrator loads by profile_name from profiles_dir.
+        # Keep profiles_dir at the root so inheritance (e.g., base, developer)
+        # can still resolve for generated profiles under profiles/generated.
+        profiles_root = Path(run_config.get("profiles_dir", "profiles")).resolve()
+        if resolved_profile.is_relative_to(profiles_root):
+            relative_profile = resolved_profile.relative_to(profiles_root).with_suffix("")
+            profile_name = relative_profile.as_posix()
+            run_config["profiles_dir"] = str(profiles_root)
+        else:
+            # Fallback for external profile locations.
+            profile_name = resolved_profile.stem
+            run_config["profiles_dir"] = str(resolved_profile.parent)
+
+        run_config["profile_path"] = str(resolved_profile)
+        run_config["profile_name"] = profile_name
+        print(f"👤 Using generated profile: {run_config['profile_name']}")
+
+        # Keep generated identity consistent with the selected profile username.
+        if not run_config.get("override_username"):
+            try:
+                profile_data = yaml.safe_load(resolved_profile.read_text(encoding="utf-8")) or {}
+                profile_username = profile_data.get("username")
+                if profile_username:
+                    run_config["override_username"] = str(profile_username)
+            except Exception as exc:
+                print(f"⚠️  Could not read profile username override: {exc}")
     if mount_path:
-        config["mount_path"] = str(mount_path)
+        run_config["mount_path"] = str(mount_path)
     
     # Initialize
-    audit_logger = AuditLogger(Path(config.get("audit_log_path", "audit.log")))
+    audit_logger = AuditLogger(Path(run_config.get("audit_log_path", "audit.log")))
     orchestrator = Orchestrator(
-        config=config,
+        config=run_config,
         audit_logger=audit_logger,
         dry_run=dry_run,
     )
@@ -399,15 +431,26 @@ def run_artifact_generation(
             print()
     
     result = orchestrator.run(progress_callback=progress_callback)
+
+    def format_duration(duration_ms: float) -> str:
+        """Format service duration for readable summaries."""
+        if duration_ms < 0.1:
+            return "<0.1ms"
+        if duration_ms < 1000:
+            return f"{duration_ms:.1f}ms"
+        return f"{duration_ms / 1000:.2f}s"
     
     # Results
     print("\n" + "=" * 70)
     print("  GENERATION SUMMARY")
     print("=" * 70 + "\n")
+
+    if dry_run:
+        print("ℹ️  Dry-run mode: service timings are simulated and can appear as <0.1ms.\n")
     
     for svc_result in result.results:
         status = "✅ PASS" if svc_result.success else "❌ FAIL"
-        time_str = f"{svc_result.duration_ms:.1f}ms"
+        time_str = format_duration(svc_result.duration_ms)
         print(f"{status} | {svc_result.service_name[:30].ljust(30)} | {time_str:>10}")
         if not svc_result.success and svc_result.error:
             print(f"       ⮡ ERROR: {svc_result.error}")
@@ -416,7 +459,7 @@ def run_artifact_generation(
     
     if result.success:
         print(f"✅ SUCCESS: All {result.services_executed} services completed")
-        print(f"⏱️  Total time: {result.total_duration_ms / 1000:.2f} seconds")
+        print(f"⏱️  Total time: {format_duration(result.total_duration_ms)} ({result.total_duration_ms / 1000:.2f} seconds)")
         return True
     else:
         print(f"❌ FAILED: {result.services_failed} out of {result.services_executed + result.services_failed} services failed")

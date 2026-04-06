@@ -540,8 +540,18 @@ def main() -> int:
                     if result.profile_path:
                         print(f"\n✓ Profile saved to: {result.profile_path}")
                         
-                        # Update config to use the generated profile
-                        config["profile_path"] = str(result.profile_path)
+                        # Update config to use the generated profile in orchestrator.
+                        generated_profile_path = Path(result.profile_path).resolve()
+                        config["profile_path"] = str(generated_profile_path)
+
+                        profiles_root = Path(config.get("profiles_dir", "profiles")).resolve()
+                        if generated_profile_path.is_relative_to(profiles_root):
+                            relative_profile = generated_profile_path.relative_to(profiles_root).with_suffix("")
+                            config["profiles_dir"] = str(profiles_root)
+                            config["profile_name"] = relative_profile.as_posix()
+                        else:
+                            config["profiles_dir"] = str(generated_profile_path.parent)
+                            config["profile_name"] = generated_profile_path.stem
                         
                         # Also override username if not already set
                         if not args.override_username:
