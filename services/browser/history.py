@@ -47,7 +47,6 @@ class BrowserHistoryService(BaseService):
         return "BrowserHistory"
 
     def apply(self, context: dict) -> None:
-        cfg = context.get("profile_config", self._cfg)
         user = context.get("username", self._username)
         days = context.get("timeline_days", 90)
         browsers = context.get("browsers", None)
@@ -56,17 +55,18 @@ class BrowserHistoryService(BaseService):
             if browsers and name not in browsers:
                 continue
             pf = os.path.join("Users", user, ud_rel, "Default")
-            self._build_db(name, pf, cfg, days)
+            self._build_db(name, pf, context, days)
 
     # ------------------------------------------------------------------
 
     def _build_db(self, browser: str, pf_path: str,
-                  cfg: dict, days: int) -> None:
+                  context: dict, days: int) -> None:
         db_dir = self._mount.resolve(pf_path)
         db_dir.mkdir(parents=True, exist_ok=True)
         db_path = db_dir / "History"
 
-        cats = cfg.get("browsing", {}).get("categories", ["general"])
+        browsing = context.get("browsing", {})
+        cats = browsing.get("categories", ["general"])
         entries = self._loader.urls_for_categories(cats)
 
         conn = sqlite3.connect(str(db_path))
@@ -81,7 +81,7 @@ class BrowserHistoryService(BaseService):
 
             rng = random.Random(42)
             url_id_map = self._insert_urls(conn, entries, rng)
-            self._insert_visits(conn, entries, url_id_map, cfg, days, rng)
+            self._insert_visits(conn, entries, url_id_map, context, days, rng)
             self._backfill_last_visit_times(conn, days, rng)
             populate_search_terms(
                 conn, url_id_map, self._loader.load_search_terms(), rng)
@@ -109,9 +109,9 @@ class BrowserHistoryService(BaseService):
             id_map[url] = cur.lastrowid
         return id_map
 
-    def _insert_visits(self, conn, entries, id_map, cfg, days, rng):
-        daily = cfg.get("browsing", {}).get("daily_avg_sites", 10)
-        wh = cfg.get("work_hours", {})
+    def _insert_visits(self, conn, entries, id_map, context, days, rng):
+        daily = context.get("browsing", {}).get("daily_avg_sites", 10)
+        wh = context.get("work_hours", {})
         hs, he = wh.get("start", 9), wh.get("end", 17)
         active = wh.get("active_days", [1, 2, 3, 4, 5])
 

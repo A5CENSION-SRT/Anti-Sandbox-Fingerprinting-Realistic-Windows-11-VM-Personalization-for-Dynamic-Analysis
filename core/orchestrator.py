@@ -146,6 +146,8 @@ class ExecutionPhase(Enum):
 _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     # Phase 1: Infrastructure
     "UserDirectoryService": ExecutionPhase.INFRASTRUCTURE,
+    # SystemContentPopulator runs in EVALUATION (last) to sweep empty dirs
+    "SystemContentPopulator": ExecutionPhase.EVALUATION,
     # Phase 2: Filesystem
     "DocumentGenerator": ExecutionPhase.FILESYSTEM,
     "MediaStubService": ExecutionPhase.FILESYSTEM,
@@ -326,6 +328,8 @@ class Orchestrator:
                 "locale": profile_context.locale,
                 "profile_type": profile_name,
                 "installed_apps": list(profile_context.installed_apps),
+                "browsing": profile_context.browsing.model_dump(),
+                "work_hours": profile_context.work_hours.model_dump(),
             }
             identity = {
                 "username": identity_bundle.user.username,

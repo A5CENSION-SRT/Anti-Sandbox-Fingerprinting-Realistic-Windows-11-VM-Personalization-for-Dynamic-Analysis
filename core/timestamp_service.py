@@ -49,6 +49,7 @@ _EVENT_WEIGHTS: Dict[str, Tuple[float, float]] = {
     "app_launch": (0.6, 0.7),
     "document_open": (0.5, 0.8),
     "document_save": (0.6, 0.8),
+    "document_created": (0.4, 0.7),
     "download": (0.5, 0.4),
     "install": (0.2, 0.5),
     "update": (0.3, 0.3),
@@ -56,6 +57,10 @@ _EVENT_WEIGHTS: Dict[str, Tuple[float, float]] = {
     "prefetch": (0.6, 0.7),
     "thumbnail": (0.5, 0.5),
     "recycle": (0.4, 0.5),
+    "delete": (0.5, 0.5),
+    "recent": (0.7, 0.6),
+    "media_created": (0.4, 0.3),
+    "system_file": (0.1, 0.3),
 }
 
 
