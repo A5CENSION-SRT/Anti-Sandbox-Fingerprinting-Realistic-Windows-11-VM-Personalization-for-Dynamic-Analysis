@@ -13,4 +13,4 @@ browsing:
 work_hours:
   start: 18
   end: 23
-  active_days: [6, 7]
+  active_days: [5, 6]

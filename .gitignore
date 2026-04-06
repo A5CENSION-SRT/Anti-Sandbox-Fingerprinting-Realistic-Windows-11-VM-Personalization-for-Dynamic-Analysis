@@ -1,11 +1,80 @@
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-.pytest_cache/
-*.egg-info/
-dist/
+*$py.class
+*.so
+.Python
+env/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Pytest
+.pytest_cache/
+
+# Environment and Logs
 .env
 *.log
+log.txt
+audit.log
+
+# Project Specific - Outputs
+output/
+test_output/
+test_vhd_output/
+vhd_output/
+*.output/
+
+# Project Specific - Temporary Mounts and Builds
+test_mount/
+test_mount_dev/
+test_mount_prod/
+temp_vhd_build/
+temp_test/
+test_vhd/
+
+# Project Specific - Verification and Diagnostics
+verify_realism.py
+diagnose_failures.py
+verify_out.txt
+verify_clean.txt
+verification_results.txt
+verify_out.txt
+
+# Binary Assets and VM Images
 images/*.vhd
 images/*.vhdx
+*.vhd
+*.vhdx
+
+# AI Model and Binary Directories
+llama-bin/
+model/
+llama_native/
+llama_vulkan/
+llama-*-bin/
+llama_out/
+
+# Other Junk
+ARC Project Progress Report.pdf
+paper.pdf
+explanation.md
+explain.md
+verification_results.txt
+verify_out.txt
+verify_clean.txt
+*.png
+*.jpg
+*.jpeg

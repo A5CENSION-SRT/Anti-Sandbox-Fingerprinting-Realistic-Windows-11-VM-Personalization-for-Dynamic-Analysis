@@ -34,33 +34,33 @@ logger = logging.getLogger(__name__)
 _PREFETCH_MAGIC = b"SCCA"  # Standard Compressed Cache Accelerator
 _PREFETCH_VERSION_WIN10 = 30
 
-# Profile-specific applications
+# Profile-specific applications — paths MUST match InstalledAppsStub
+# definitions for cross-reference coherence.
 _PROFILE_APPS: Dict[str, List[Dict[str, Any]]] = {
     "office_user": [
         {"name": "OUTLOOK.EXE", "path": r"C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE", "runs": (50, 200)},
         {"name": "WINWORD.EXE", "path": r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE", "runs": (30, 150)},
         {"name": "EXCEL.EXE", "path": r"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE", "runs": (20, 100)},
         {"name": "POWERPNT.EXE", "path": r"C:\Program Files\Microsoft Office\root\Office16\POWERPNT.EXE", "runs": (10, 50)},
-        {"name": "TEAMS.EXE", "path": r"C:\Users\{username}\AppData\Local\Microsoft\Teams\current\Teams.exe", "runs": (100, 500)},
+        {"name": "MS-TEAMS.EXE", "path": r"C:\Program Files\WindowsApps\MSTeams\ms-teams.exe", "runs": (100, 500)},
         {"name": "CHROME.EXE", "path": r"C:\Program Files\Google\Chrome\Application\chrome.exe", "runs": (200, 800)},
         {"name": "MSEDGE.EXE", "path": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "runs": (50, 200)},
     ],
     "developer": [
         {"name": "CODE.EXE", "path": r"C:\Users\{username}\AppData\Local\Programs\Microsoft VS Code\Code.exe", "runs": (200, 800)},
-        {"name": "DOCKER.EXE", "path": r"C:\Program Files\Docker\Docker\Docker Desktop.exe", "runs": (50, 200)},
-        {"name": "WINDOWSTERMINAL.EXE", "path": r"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal\wt.exe", "runs": (300, 1000)},
+        {"name": "DOCKER DESKTOP.EXE", "path": r"C:\Program Files\Docker\Docker\Docker Desktop.exe", "runs": (50, 200)},
+        {"name": "WT.EXE", "path": r"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal\wt.exe", "runs": (300, 1000)},
         {"name": "GIT.EXE", "path": r"C:\Program Files\Git\cmd\git.exe", "runs": (100, 500)},
-        {"name": "PYTHON.EXE", "path": r"C:\Users\{username}\AppData\Local\Programs\Python\Python312\python.exe", "runs": (100, 400)},
         {"name": "NODE.EXE", "path": r"C:\Program Files\nodejs\node.exe", "runs": (50, 200)},
         {"name": "CHROME.EXE", "path": r"C:\Program Files\Google\Chrome\Application\chrome.exe", "runs": (200, 800)},
+        {"name": "MSEDGE.EXE", "path": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "runs": (50, 200)},
     ],
     "home_user": [
         {"name": "CHROME.EXE", "path": r"C:\Program Files\Google\Chrome\Application\chrome.exe", "runs": (300, 1000)},
         {"name": "MSEDGE.EXE", "path": r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "runs": (100, 400)},
         {"name": "SPOTIFY.EXE", "path": r"C:\Users\{username}\AppData\Roaming\Spotify\Spotify.exe", "runs": (100, 500)},
-        {"name": "DISCORD.EXE", "path": r"C:\Users\{username}\AppData\Local\Discord\app-1.0.9028\Discord.exe", "runs": (50, 200)},
-        {"name": "VLCPORTABLE.EXE", "path": r"C:\Program Files\VLC\vlc.exe", "runs": (30, 150)},
-        {"name": "STEAM.EXE", "path": r"C:\Program Files (x86)\Steam\steam.exe", "runs": (20, 100)},
+        {"name": "VLC.EXE", "path": r"C:\Program Files\VideoLAN\VLC\vlc.exe", "runs": (30, 150)},
+        {"name": "ONEDRIVE.EXE", "path": r"C:\Program Files\Microsoft OneDrive\OneDrive.exe", "runs": (50, 200)},
     ],
 }
 
