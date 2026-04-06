@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import platform
 import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -32,6 +33,16 @@ from typing import Any, Dict, List, Optional
 from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
+
+# Windows file time APIs for setting creation time
+try:
+    import pywintypes
+    import win32con
+    import win32file
+
+    _HAS_WIN32 = True
+except ImportError:
+    _HAS_WIN32 = False
 
 
 # ---------------------------------------------------------------------------
@@ -339,8 +350,9 @@ class InstalledAppsStub(BaseService):
         audit_logger: Shared audit logger for traceability.
     """
 
-    def __init__(self, mount_manager: Any, audit_logger: Any) -> None:
+    def __init__(self, mount_manager: Any, timestamp_service: Any, audit_logger: Any) -> None:
         self._mount = mount_manager
+        self._ts = timestamp_service
         self._audit = audit_logger
 
     @property
@@ -411,6 +423,7 @@ class InstalledAppsStub(BaseService):
             else:
                 full_path.write_bytes(b"\x00" * max(1024, size_kb * 1024))
 
+            self._apply_timestamps(full_path, event_type="system_file")
             created += 1
             self._audit.log({
                 "service": self.service_name,
@@ -464,6 +477,7 @@ class InstalledAppsStub(BaseService):
 
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 self._write_stub_file(full_path, spec)
+                self._apply_timestamps(full_path, event_type="install")
                 created += 1
 
                 self._audit.log({
@@ -475,6 +489,39 @@ class InstalledAppsStub(BaseService):
                 })
 
         return created
+
+    def _apply_timestamps(self, path: Path, event_type: str) -> None:
+        """Apply timestamps from the timestamp service.
+
+        This service creates a lot of binaries; without timeline timestamps
+        they cluster at execution time and break day/night realism checks.
+        """
+        if self._ts is None:
+            return
+        timestamps = self._ts.get_timestamp(event_type)
+        os.utime(
+            str(path),
+            (timestamps["accessed"].timestamp(), timestamps["modified"].timestamp()),
+        )
+        if _HAS_WIN32 and platform.system() == "Windows":
+            try:
+                created = pywintypes.Time(timestamps["created"])
+                handle = win32file.CreateFile(
+                    str(path),
+                    win32con.GENERIC_WRITE,
+                    win32con.FILE_SHARE_WRITE,
+                    None,
+                    win32con.OPEN_EXISTING,
+                    win32con.FILE_ATTRIBUTE_NORMAL,
+                    None,
+                )
+                try:
+                    win32file.SetFileTime(handle, created, None, None)
+                finally:
+                    handle.Close()
+            except Exception:
+                # Creation time is best-effort; mtime/atime are the main realism signals.
+                pass
 
     # -- file writers -------------------------------------------------------
 

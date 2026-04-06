@@ -287,7 +287,7 @@ class SystemContentPopulator(BaseService):
 
         try:
             created += self._populate_windows_system(rng)
-            created += self._populate_user_shell_folders(username, rng)
+            created += self._populate_user_shell_folders(username, profile_type, rng)
             created += self._populate_user_appdata(username, rng)
             created += self._populate_public_dirs(rng)
             created += self._populate_scheduled_tasks(rng)
@@ -531,8 +531,17 @@ class SystemContentPopulator(BaseService):
     # User shell folders (Desktop, Downloads, Music, etc.)
     # ------------------------------------------------------------------
 
-    def _populate_user_shell_folders(self, username: str, rng: Random) -> int:
-        """Add desktop.ini to shell folders and seed downloads/desktop."""
+    def _populate_user_shell_folders(
+        self,
+        username: str,
+        profile_type: str,
+        rng: Random,
+    ) -> int:
+        """Seed user-visible shell folders with plausible contents.
+
+        Goal: avoid the "only desktop.ini everywhere" look while keeping the
+        artifacts small, deterministic, and safe (no executable code).
+        """
         created = 0
         user_root = Path("Users") / username
 
@@ -561,10 +570,111 @@ class SystemContentPopulator(BaseService):
         self._write_bytes(dl / "VCRedist_x64.exe", b"MZ" + b"\x00" * 126, "download")
         created += 2
 
-        # Seed Desktop with a shortcut stub
-        desktop = user_root / "Desktop"
-        self._write_bytes(desktop / "desktop.ini", b"[.ShellClassInfo]\r\n", "system_file")
+        # Favorites: real machines often have a few .url shortcuts.
+        fav = user_root / "Favorites"
+        favorites = [
+            ("Microsoft.url", "https://www.microsoft.com/"),
+            ("Google.url", "https://www.google.com/"),
+        ]
+        if profile_type == "developer":
+            favorites.extend([
+                ("GitHub.url", "https://github.com/"),
+                ("Stack Overflow.url", "https://stackoverflow.com/"),
+                ("Python Docs.url", "https://docs.python.org/3/"),
+            ])
+        elif profile_type == "office_user":
+            favorites.extend([
+                ("Outlook Web.url", "https://outlook.office.com/"),
+                ("OneDrive.url", "https://onedrive.live.com/"),
+                ("Microsoft 365.url", "https://www.office.com/"),
+            ])
+        else:
+            favorites.extend([
+                ("YouTube.url", "https://www.youtube.com/"),
+                ("News.url", "https://www.bbc.com/news"),
+            ])
+
+        for fname, url in favorites:
+            content = f"[InternetShortcut]\r\nURL={url}\r\n".encode("utf-8")
+            self._write_bytes(fav / fname, content, "browser_visit")
+            created += 1
+
+        # Links: add a couple of shortcuts pointing at common user folders.
+        links = user_root / "Links"
+        for link_name in ("Downloads.url", "Documents.url", "Pictures.url"):
+            target_folder = link_name.replace(".url", "")
+            target = f"file:///C:/Users/{username}/{target_folder}/"
+            content = f"[InternetShortcut]\r\nURL={target}\r\n".encode("utf-8")
+            self._write_bytes(links / link_name, content, "recent")
+            created += 1
+
+        # OneDrive: seed with a couple of plausible user files.
+        od = user_root / "OneDrive"
+        self._write_text(
+            od / "Readme.txt",
+            "OneDrive\n=======\n\n- Shared files sync here.\n- Recent activity is available in the OneDrive client.\n",
+            "system_file",
+        )
         created += 1
+        if profile_type == "developer":
+            self._write_text(od / "Dev_Notes.md", "- TODO: review CI failures\n- Draft: architecture notes\n", "recent")
+            created += 1
+        elif profile_type == "office_user":
+            self._write_text(od / "Meeting_Agenda.txt", "Agenda:\n- Status update\n- Next steps\n", "recent")
+            created += 1
+        else:
+            self._write_text(od / "Family_Todo.txt", "Weekend:\n- groceries\n- laundry\n", "recent")
+            created += 1
+
+        # Music: even if empty, a couple tiny artifacts are common (playlist / thumbs).
+        music = user_root / "Music"
+        self._write_text(music / "playlist.m3u", "#EXTM3U\n#EXTINF:0,Sample Track\n", "media_created")
+        created += 1
+
+        # Contacts / Searches / Saved Games / 3D Objects: seed with minimal, harmless files.
+        contacts = user_root / "Contacts"
+        self._write_text(contacts / "contacts.txt", "John Smith <john.smith@example.com>\n", "system_file")
+        created += 1
+
+        searches = user_root / "Searches"
+        self._write_text(
+            searches / "Recent Documents.search-ms",
+            "<?xml version=\"1.0\"?><searchConnectorDescription />\n",
+            "system_file",
+        )
+        created += 1
+
+        saved_games = user_root / "Saved Games"
+        self._write_text(saved_games / "readme.txt", "Saved games and settings.\n", "system_file")
+        created += 1
+
+        objects3d = user_root / "3D Objects"
+        self._write_text(objects3d / "readme.txt", "3D Objects\n", "system_file")
+        created += 1
+
+        # Seed Desktop with a couple of realistic items (shortcuts + a note).
+        desktop = user_root / "Desktop"
+        # A short "notes" file is very common on real desktops.
+        self._write_text(
+            desktop / "Notes.txt",
+            "TODO:\n- Review pull requests\n- Update documentation\n- Follow up on meeting action items\n",
+            "recent",
+        )
+        created += 1
+
+        # Shortcuts are common. We generate minimal .lnk-like stubs.
+        # (We don't attempt a full LNK spec here; RecentItemsService already
+        # produces proper LNKs elsewhere.)
+        self._write_bytes(desktop / "Google Chrome.lnk", _sendto_lnk_stub(""), "recent")
+        created += 1
+        if profile_type == "developer":
+            self._write_bytes(desktop / "Visual Studio Code.lnk", _sendto_lnk_stub(""), "recent")
+            self._write_bytes(desktop / "Windows Terminal.lnk", _sendto_lnk_stub(""), "recent")
+            created += 2
+        elif profile_type == "office_user":
+            self._write_bytes(desktop / "Outlook.lnk", _sendto_lnk_stub(""), "recent")
+            self._write_bytes(desktop / "Excel.lnk", _sendto_lnk_stub(""), "recent")
+            created += 2
 
         return created
 

@@ -92,8 +92,14 @@ def insert_download(conn: sqlite3.Connection, entry: dict,
     )
 
 
-def create_placeholder_file(downloads_dir: Path, filename: str,
-                            size_bytes: int) -> None:
+def create_placeholder_file(
+    downloads_dir: Path,
+    filename: str,
+    size_bytes: int,
+    *,
+    timestamp_service=None,
+    event_type: str = "download",
+) -> None:
     """Write a zero-byte stub file so the path exists on the filesystem.
 
     We do not write ``size_bytes`` of data (that would be wasteful), but
@@ -101,3 +107,13 @@ def create_placeholder_file(downloads_dir: Path, filename: str,
     """
     target = downloads_dir / filename
     target.touch(exist_ok=True)
+    if timestamp_service is not None:
+        try:
+            ts = timestamp_service.get_timestamp(event_type)
+            os.utime(
+                str(target),
+                (ts["accessed"].timestamp(), ts["modified"].timestamp()),
+            )
+        except Exception:
+            # Best-effort: placeholder timestamps are non-critical.
+            pass

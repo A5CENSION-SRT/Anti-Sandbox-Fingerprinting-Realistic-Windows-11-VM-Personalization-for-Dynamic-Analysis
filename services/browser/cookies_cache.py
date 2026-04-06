@@ -355,6 +355,16 @@ class CookiesCacheService(BaseService):
         for name in ("index", "data_0", "data_1", "data_2", "data_3"):
             stub = cache_dir / name
             stub.touch(exist_ok=True)
+            try:
+                ts = self._ts.get_timestamp("browser_visit")
+                os.utime(
+                    str(stub),
+                    (ts["accessed"].timestamp(), ts["modified"].timestamp()),
+                )
+            except Exception:
+                # Best-effort: cache stubs are not parsed, but should not
+                # cluster at execution time either.
+                pass
 
         self._audit.log({
             "service": self.service_name,

@@ -45,22 +45,24 @@ _EVENT_WEIGHTS: Dict[str, Tuple[float, float]] = {
     "file_create": (0.5, 0.6),
     "file_modify": (0.7, 0.6),
     "file_access": (0.8, 0.5),
-    "browser_visit": (0.6, 0.4),
+    "browser_visit": (0.6, 0.9),
     "app_launch": (0.6, 0.7),
     "document_open": (0.5, 0.8),
     "document_save": (0.6, 0.8),
     "document_created": (0.4, 0.7),
-    "download": (0.5, 0.4),
+    "download": (0.5, 0.9),
     "install": (0.2, 0.5),
-    "update": (0.3, 0.3),
+    "update": (0.3, 0.9),
     "registry_write": (0.4, 0.6),
-    "prefetch": (0.6, 0.7),
-    "thumbnail": (0.5, 0.5),
-    "recycle": (0.4, 0.5),
-    "delete": (0.5, 0.5),
-    "recent": (0.7, 0.6),
+    "prefetch": (0.6, 0.9),
+    "thumbnail": (0.5, 0.95),
+    "recycle": (0.4, 0.9),
+    "delete": (0.5, 0.9),
+    "recent": (0.7, 0.9),
     "media_created": (0.4, 0.3),
-    "system_file": (0.1, 0.3),
+    # High-volume filler content (Temp, Logs, ProgramData) should still
+    # skew to daytime so the overall filesystem doesn't look "night-built".
+    "system_file": (0.1, 0.98),
 }
 
 
@@ -103,7 +105,10 @@ class TimestampService:
     ) -> None:
         self._seed = seed
         self._timeline_days = timeline_days
-        self._base_time = base_time or datetime.now(timezone.utc)
+        # Use local time by default so hour-based heuristics (e.g.
+        # "daytime activity bias") match what forensic tooling/our verifier
+        # interpret when converting POSIX timestamps back to datetimes.
+        self._base_time = base_time or datetime.now().astimezone()
 
         # Parse work hours config
         wh = work_hours or {}
@@ -321,8 +326,18 @@ class TimestampService:
             # Work hours
             hour = self._rng.randint(self._work_start, self._work_end - 1)
         else:
-            # Any hour (but less likely late night)
-            weights = [1] * 6 + [3] * 12 + [2] * 4 + [1] * 2  # 0-23
+            # Any hour, but strongly prefer typical waking hours. This helps
+            # the global artifact set match "lived-in workstation" patterns
+            # when thousands of files are created across many services.
+            #
+            # Weights correspond to hours 0..23.
+            weights = (
+                [0.01] * 6       # 00-05 near-zero
+                + [0.6, 0.8]     # 06-07 early morning
+                + [8.0] * 12     # 08-19 strong daytime peak
+                + [1.5, 1.0]     # 20-21 evening
+                + [0.01, 0.01]   # 22-23 near-zero
+            )
             hour = self._rng.choices(range(24), weights=weights)[0]
 
         minute = self._rng.randint(0, 59)

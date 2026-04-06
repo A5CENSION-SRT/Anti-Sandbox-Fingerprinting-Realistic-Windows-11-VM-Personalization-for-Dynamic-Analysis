@@ -6,6 +6,7 @@ some usage.
 """
 
 import json
+import os
 from pathlib import Path
 
 
@@ -108,12 +109,25 @@ def generate_secure_preferences() -> dict:
 
 def write_json(mount_manager, rel_path: str, data: dict,
                audit_logger, service_name: str,
-               browser_name: str) -> None:
-    """Persist a JSON file onto the mounted image and log it."""
+               browser_name: str,
+               timestamp_service=None,
+               event_type: str = "browser_visit") -> None:
+    """Persist a JSON file onto the mounted image and log it.
+
+    If a timestamp_service is provided, apply realistic timestamps to avoid
+    clustering at execution time (which is a common sandbox fingerprint).
+    """
     full = mount_manager.resolve(rel_path)
     full.parent.mkdir(parents=True, exist_ok=True)
     with open(full, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
+    if timestamp_service is not None:
+        try:
+            ts = timestamp_service.get_timestamp(event_type)
+            os.utime(str(full), (ts["accessed"].timestamp(), ts["modified"].timestamp()))
+        except Exception:
+            # Timestamp application is best-effort for config JSONs.
+            pass
     audit_logger.log({
         "service": service_name,
         "operation": "create_file",

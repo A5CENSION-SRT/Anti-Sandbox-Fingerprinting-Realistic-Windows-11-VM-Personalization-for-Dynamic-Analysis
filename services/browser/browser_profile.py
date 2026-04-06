@@ -81,15 +81,19 @@ class BrowserProfileService(BaseService):
         # Config files
         write_json(self._mount, os.path.join(ud_path, "Local State"),
                    generate_local_state(browser, cts),
-                   self._audit, self.service_name, browser)
+                   self._audit, self.service_name, browser,
+                   timestamp_service=self._ts, event_type="browser_visit")
         write_json(self._mount, os.path.join(pf_path, "Preferences"),
                    generate_preferences(user, cts),
-                   self._audit, self.service_name, browser)
+                   self._audit, self.service_name, browser,
+                   timestamp_service=self._ts, event_type="browser_visit")
         write_json(self._mount, os.path.join(pf_path, "Secure Preferences"),
                    generate_secure_preferences(),
-                   self._audit, self.service_name, browser)
+                   self._audit, self.service_name, browser,
+                   timestamp_service=self._ts, event_type="browser_visit")
 
         # Bookmarks
         bm = load_and_enrich(self._templates_dir, profile, cts)
         write_json(self._mount, os.path.join(pf_path, "Bookmarks"),
-                   bm, self._audit, self.service_name, browser)
+                   bm, self._audit, self.service_name, browser,
+                   timestamp_service=self._ts, event_type="browser_visit")

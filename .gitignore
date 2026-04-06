@@ -46,7 +46,7 @@ temp_test/
 test_vhd/
 
 # Project Specific - Verification and Diagnostics
-verify_realism.py
+
 diagnose_failures.py
 verify_out.txt
 verify_clean.txt

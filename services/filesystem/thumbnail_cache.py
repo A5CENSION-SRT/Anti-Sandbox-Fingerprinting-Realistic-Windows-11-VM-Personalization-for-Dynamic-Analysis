@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import platform
 import struct
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +22,16 @@ from typing import Any, Dict, List, Tuple
 from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
+
+# Windows file time APIs for setting creation time
+try:
+    import pywintypes
+    import win32con
+    import win32file
+
+    _HAS_WIN32 = True
+except ImportError:
+    _HAS_WIN32 = False
 
 
 # ---------------------------------------------------------------------------
@@ -143,12 +155,12 @@ class ThumbnailCacheService(BaseService):
                 )
 
                 file_path = cache_dir / filename
-                self._write_file(file_path, content)
+                self._write_file(file_path, content, event_type="thumbnail")
                 created_files += 1
 
             # Create the index file
             idx_content = self._create_index_file(rng)
-            self._write_file(cache_dir / "iconcache_idx.db", idx_content)
+            self._write_file(cache_dir / "iconcache_idx.db", idx_content, event_type="thumbnail")
             created_files += 1
 
             self._audit.log({
@@ -170,11 +182,13 @@ class ThumbnailCacheService(BaseService):
                 f"Thumbnail cache generation failed: {exc}"
             ) from exc
 
-    def _write_file(self, rel_path: Path, content: bytes) -> None:
-        """Write file content to the mounted filesystem."""
+    def _write_file(self, rel_path: Path, content: bytes, event_type: str = "thumbnail") -> None:
+        """Write file content to the mounted filesystem and apply timestamps."""
         full_path = self._mount.resolve(str(rel_path))
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(content)
+
+        self._apply_timestamps(full_path, event_type)
 
         self._audit.log({
             "service": self.service_name,
@@ -182,6 +196,32 @@ class ThumbnailCacheService(BaseService):
             "path": str(full_path),
             "size": len(content),
         })
+
+    def _apply_timestamps(self, path: Path, event_type: str) -> None:
+        """Apply created/modified/accessed timestamps from the timestamp service."""
+        timestamps = self._ts.get_timestamp(event_type)
+        accessed = timestamps["accessed"].timestamp()
+        modified = timestamps["modified"].timestamp()
+        os.utime(str(path), (accessed, modified))
+
+        if _HAS_WIN32 and platform.system() == "Windows":
+            try:
+                created = pywintypes.Time(timestamps["created"])
+                handle = win32file.CreateFile(
+                    str(path),
+                    win32con.GENERIC_WRITE,
+                    win32con.FILE_SHARE_WRITE,
+                    None,
+                    win32con.OPEN_EXISTING,
+                    win32con.FILE_ATTRIBUTE_NORMAL,
+                    None,
+                )
+                try:
+                    win32file.SetFileTime(handle, created, None, None)
+                finally:
+                    handle.Close()
+            except Exception as exc:
+                logger.debug("Could not set creation time for %s: %s", path, exc)
 
     def _create_thumbcache_file(
         self,

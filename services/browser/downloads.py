@@ -76,7 +76,13 @@ class BrowserDownloadService(BaseService):
         )
         dl_dir.mkdir(parents=True, exist_ok=True)
         for e in entries:
-            create_placeholder_file(dl_dir, e["filename"], e["size_bytes"])
+            create_placeholder_file(
+                dl_dir,
+                e["filename"],
+                e["size_bytes"],
+                timestamp_service=self._ts,
+                event_type="download",
+            )
             self._audit.log({
                 "service": self.service_name,
                 "operation": "create_file",

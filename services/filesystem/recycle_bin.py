@@ -11,6 +11,8 @@ The Recycle Bin path is: $Recycle.Bin/{SID}/
 from __future__ import annotations
 
 import logging
+import os
+import platform
 import struct
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -20,6 +22,16 @@ from typing import Any, Dict, List, Tuple
 from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
+
+# Windows file time APIs for setting creation time
+try:
+    import pywintypes
+    import win32con
+    import win32file
+
+    _HAS_WIN32 = True
+except ImportError:
+    _HAS_WIN32 = False
 
 
 # ---------------------------------------------------------------------------
@@ -148,14 +160,14 @@ class RecycleBinService(BaseService):
                 i_content = self._create_index_file(
                     original_path, rng, size_range
                 )
-                self._write_file(recycle_dir / i_filename, i_content)
+                self._write_file(recycle_dir / i_filename, i_content, event_type="delete")
                 created_files += 1
 
                 # Create $R file (placeholder data)
                 r_filename = f"$R{file_id}{ext}"
                 r_size = rng.randint(*size_range)
                 r_content = self._create_data_stub(r_size, rng)
-                self._write_file(recycle_dir / r_filename, r_content)
+                self._write_file(recycle_dir / r_filename, r_content, event_type="recycle")
                 created_files += 1
 
             self._audit.log({
@@ -178,11 +190,13 @@ class RecycleBinService(BaseService):
                 f"Recycle Bin generation failed: {exc}"
             ) from exc
 
-    def _write_file(self, rel_path: Path, content: bytes) -> None:
-        """Write file content to the mounted filesystem."""
+    def _write_file(self, rel_path: Path, content: bytes, event_type: str = "recycle") -> None:
+        """Write file content to the mounted filesystem and apply timestamps."""
         full_path = self._mount.resolve(str(rel_path))
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(content)
+
+        self._apply_timestamps(full_path, event_type)
 
         self._audit.log({
             "service": self.service_name,
@@ -190,6 +204,32 @@ class RecycleBinService(BaseService):
             "path": str(full_path),
             "size": len(content),
         })
+
+    def _apply_timestamps(self, path: Path, event_type: str) -> None:
+        """Apply created/modified/accessed timestamps from the timestamp service."""
+        timestamps = self._ts.get_timestamp(event_type)
+        accessed = timestamps["accessed"].timestamp()
+        modified = timestamps["modified"].timestamp()
+        os.utime(str(path), (accessed, modified))
+
+        if _HAS_WIN32 and platform.system() == "Windows":
+            try:
+                created = pywintypes.Time(timestamps["created"])
+                handle = win32file.CreateFile(
+                    str(path),
+                    win32con.GENERIC_WRITE,
+                    win32con.FILE_SHARE_WRITE,
+                    None,
+                    win32con.OPEN_EXISTING,
+                    win32con.FILE_ATTRIBUTE_NORMAL,
+                    None,
+                )
+                try:
+                    win32file.SetFileTime(handle, created, None, None)
+                finally:
+                    handle.Close()
+            except Exception as exc:
+                logger.debug("Could not set creation time for %s: %s", path, exc)
 
     def _generate_sid(self, username: str, seed: str) -> str:
         """Generate a deterministic Windows SID.
@@ -235,7 +275,7 @@ class RecycleBinService(BaseService):
             "LocalizedResourceName=@%SystemRoot%\\system32\\shell32.dll,-8964\r\n"
         ).encode("utf-8")
 
-        self._write_file(recycle_dir / "desktop.ini", content)
+        self._write_file(recycle_dir / "desktop.ini", content, event_type="system_file")
 
     def _create_index_file(
         self,
