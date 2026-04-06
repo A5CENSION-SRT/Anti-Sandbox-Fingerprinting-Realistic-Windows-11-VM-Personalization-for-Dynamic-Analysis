@@ -1,0 +1,84 @@
+Generate filename patterns for this user persona that can be expanded into thousands of variations.
+
+**Persona**:
+- Name: {full_name}
+- Occupation: {occupation}
+- Organization: {organization}
+- Projects: {projects}
+- Work Style: {work_style}
+
+Output ONLY a JSON array of filename pattern seeds:
+
+```json
+[
+  {{
+    "seed_id": "fn_001",
+    "pattern": "{{project}}_{{doc_type}}_{{date}}{{suffix}}.{{ext}}",
+    "context": "Project documentation files",
+    "variables": {{
+      "project": ["ProjectAlpha", "WebRedesign", "Q4Campaign", "ClientPortal"],
+      "doc_type": ["Report", "Notes", "Summary", "Analysis", "Plan"],
+      "ext": ["docx", "pdf", "xlsx"]
+    }},
+    "date_formats": ["%Y%m%d", "%Y-%m-%d", "%B_%d"],
+    "version_styles": ["v{{n}}", "_v{{n}}", " ({{n}})"],
+    "suffix_options": ["", "_DRAFT", "_Final", "_reviewed", "_APPROVED"],
+    "expansion": {{
+      "target_count": 200,
+      "date_range_days": 90,
+      "include_versions": true,
+      "include_drafts": true,
+      "include_dates": true
+    }}
+  }},
+  {{
+    "seed_id": "fn_002", 
+    "pattern": "IMG_{{date}}_{{counter}}.jpg",
+    "context": "Camera photos with sequential numbering",
+    "variables": {{}},
+    "date_formats": ["%Y%m%d"],
+    "version_styles": [],
+    "suffix_options": [""],
+    "expansion": {{
+      "target_count": 500,
+      "date_range_days": 90,
+      "include_versions": false,
+      "include_drafts": false,
+      "include_dates": true
+    }}
+  }}
+]
+```
+
+Generate 10-15 filename patterns covering:
+
+1. **Work Documents**:
+   - Project files: {{project}}_{{type}}_{{date}}.ext
+   - Meeting notes: MeetingNotes_{{topic}}_{{date}}.docx
+   - Reports: {{department}}_{{report_type}}_{{quarter}}_{{year}}.pdf
+
+2. **Personal Files**:
+   - Photos: IMG_{{date}}_{{counter}}.jpg
+   - Screenshots: Screenshot_{{date}}_{{time}}.png
+   - Downloads: {{app_name}}_Setup.exe
+
+3. **Media**:
+   - Music: {{artist}} - {{track}}.mp3
+   - Videos: {{event}}_{{date}}.mp4
+   - Recordings: Recording_{{date}}_{{counter}}.m4a
+
+4. **Technical** (for developers):
+   - Code: {{module}}_{{version}}.py
+   - Configs: {{service}}_config.json
+   - Logs: {{app}}_{{date}}.log
+
+For each pattern, provide:
+- **pattern**: Template with {{variable}} placeholders
+- **context**: What kind of files this generates
+- **variables**: Dict of variable → possible values
+- **date_formats**: strftime patterns to use
+- **version_styles**: How to add version numbers (v1, _v1, (1))
+- **suffix_options**: Possible suffixes (_DRAFT, _Final, etc.)
+- **expansion**: Target count and rules
+
+These patterns will be combined with the permutation engine to generate thousands of realistic filenames.

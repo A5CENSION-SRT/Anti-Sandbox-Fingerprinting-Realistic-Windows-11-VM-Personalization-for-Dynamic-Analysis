@@ -1,0 +1,56 @@
+Generate a detailed, realistic persona for a Windows 11 user based on the following input:
+
+**Role/Occupation**: {occupation}
+**Location**: {location}
+**Additional Context**: {hints}
+
+Create a coherent, believable persona that could be a real person. Output ONLY valid JSON matching this exact structure:
+
+```json
+{{
+  "full_name": "First Last",
+  "username": "first.last",
+  "email": "first.last@company.com",
+  "organization": "Company Name Inc.",
+  "occupation": "Job Title",
+  "department": "Department Name or null",
+  "age_range": "28-35",
+  "locale": "en_US",
+  "location": "City, State",
+  "tech_proficiency": "low|intermediate|high",
+  "interests": {{
+    "hobbies": ["hobby1", "hobby2", "hobby3", "hobby4", "hobby5"],
+    "professional_topics": ["topic1", "topic2", "topic3"],
+    "entertainment": ["show/movie genre", "music genre", "game type"]
+  }},
+  "work_style": {{
+    "description": "Brief work style description",
+    "typical_tools": ["tool1", "tool2", "tool3", "tool4"],
+    "collaboration_style": "solo|collaborative|hybrid",
+    "meeting_frequency": "low|moderate|high"
+  }},
+  "project_names": ["Project Alpha", "Q4 Initiative", "Client Portal", "..."],
+  "colleague_names": ["John Smith", "Sarah Johnson", "Mike Chen", "..."],
+  "work_hours_start": 9,
+  "work_hours_end": 17,
+  "active_days": [1, 2, 3, 4, 5]
+}}
+```
+
+Requirements:
+1. **Name**: Use a realistic name appropriate for the locale
+2. **Username**: Format as firstname.lastname (lowercase, no spaces)
+3. **Email**: Use organization domain (derive from company name)
+4. **Organization**: For personal/home users, use "Personal"
+5. **Age Range**: Appropriate for the occupation (e.g., senior roles = older)
+6. **Tech Proficiency**: Based on occupation (developers=high, general office=intermediate)
+7. **Interests**: 
+   - 5-8 hobbies relevant to persona demographics
+   - 3-5 professional topics they'd follow
+   - 2-4 entertainment preferences
+8. **Work Style**: Realistic for the occupation
+9. **Project Names**: 5-10 realistic project/initiative names they'd work on
+10. **Colleague Names**: 8-15 realistic colleague names for documents
+11. **Work Hours**: Appropriate for the role and culture
+
+Make all elements internally consistent - a marketing manager's hobbies, tools, and projects should all feel coherent.

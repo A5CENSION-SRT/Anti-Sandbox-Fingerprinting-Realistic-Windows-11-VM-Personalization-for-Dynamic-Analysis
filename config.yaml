@@ -19,3 +19,110 @@ audit_log_path: "audit.log"
 
 # Error handling
 abort_on_failure: false
+
+# ---------------------------------------------------------------------------
+# AI-Powered Profile Generation (Gemini)
+# ---------------------------------------------------------------------------
+ai:
+  # Enable/disable AI generation (falls back to static profiles if disabled)
+  enabled: true
+  
+  # Provider configuration
+  provider: "gemini"
+  
+  gemini:
+    # API key (use environment variable for security)
+    # Set GEMINI_API_KEY environment variable or uncomment below
+    # api_key: "your-api-key-here"
+    
+    # Model selection
+    # Options: gemini-2.0-flash (fast/cheap), gemini-1.5-pro (quality)
+    model: "gemini-2.0-flash"
+    
+    # Generation temperature (0.0 = deterministic, 1.0 = creative)
+    temperature: 0.7
+    
+    # Rate limiting (requests per minute)
+    rate_limit_rpm: 60
+    
+    # Retry configuration
+    max_retries: 3
+  
+  # Response caching (reduces API costs, enables reproducibility)
+  cache:
+    enabled: true
+    directory: ".cache/gemini"
+    ttl_hours: 168  # 1 week
+  
+  # Fallback behavior when API unavailable
+  fallback:
+    enabled: true
+    use_static_profiles: true
+    log_warnings: true
+
+# ---------------------------------------------------------------------------
+# Artifact Scale Targets
+# ---------------------------------------------------------------------------
+artifact_scale:
+  # Target counts per artifact type (seeds × expansion = total)
+  downloads:
+    seeds: 20
+    expansion_factor: 75
+    target_total: 1500
+  
+  documents:
+    seeds: 30
+    expansion_factor: 150
+    target_total: 4500
+  
+  pictures:
+    seeds: 15
+    expansion_factor: 50
+    target_total: 750
+  
+  videos:
+    seeds: 8
+    expansion_factor: 30
+    target_total: 240
+  
+  music:
+    seeds: 10
+    expansion_factor: 50
+    target_total: 500
+  
+  browser_history:
+    seeds: 50
+    expansion_factor: 150
+    target_total: 7500
+  
+  search_terms:
+    seeds: 50
+    expansion_factor: 30
+    target_total: 1500
+  
+  bookmarks:
+    seeds: 40
+    expansion_factor: 5
+    target_total: 200
+
+# ---------------------------------------------------------------------------
+# Permutation Engine Configuration
+# ---------------------------------------------------------------------------
+permutation:
+  # Date range for spreading artifacts
+  date_spread_days: 90
+  
+  # Version number settings
+  versions:
+    max_version: 5
+    styles: ["v{n}", "V{n}", "_{n}"]
+  
+  # Common filename suffixes
+  suffixes: ["", "_DRAFT", "_Final", "_reviewed", "_backup", "_old"]
+  
+  # Date format patterns for filenames
+  date_formats:
+    - "%Y%m%d"
+    - "%Y-%m-%d"
+    - "%B_%d_%Y"
+    - "%d%b%Y"
