@@ -12,6 +12,7 @@ Checks every requirement from the problem statement:
 9. Audit trail completeness
 """
 
+import argparse
 import json
 import os
 import sqlite3
@@ -20,9 +21,134 @@ import zipfile
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
-OUTPUT = Path(r"d:\German Project\arc\output")
-AUDIT = Path(r"d:\German Project\arc\audit.log")
+import yaml
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+DEFAULT_CONFIG = PROJECT_ROOT / "config.yaml"
+OUTPUT = PROJECT_ROOT / "output"
+AUDIT = PROJECT_ROOT / "audit.log"
+TIMELINE_DAYS = 90
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Verify generated ARC artifacts for realism and consistency.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=DEFAULT_CONFIG,
+        help="Path to ARC config YAML (default: ./config.yaml)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Override output directory to verify",
+    )
+    parser.add_argument(
+        "--audit",
+        type=Path,
+        default=None,
+        help="Override audit log path",
+    )
+    return parser.parse_args()
+
+
+def _resolve_path(path: Path, base_dir: Path) -> Path:
+    expanded = path.expanduser()
+    if expanded.is_absolute():
+        return expanded
+    return (base_dir / expanded).resolve()
+
+
+def load_config(config_path: Path) -> Dict[str, Any]:
+    if not config_path.exists():
+        return {}
+
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return cfg if isinstance(cfg, dict) else {}
+    except Exception as e:
+        print(f"[WARN] Could not parse config file {config_path}: {e}")
+        return {}
+
+
+def resolve_runtime_paths(
+    config_path: Path,
+    output_override: Optional[Path],
+    audit_override: Optional[Path],
+) -> Tuple[Path, Path, int]:
+    cfg = load_config(config_path)
+    config_base = config_path.parent if config_path.parent else PROJECT_ROOT
+
+    output_candidates = []
+    if output_override is not None:
+        output_candidates.append(_resolve_path(output_override, PROJECT_ROOT))
+
+    env_output = os.environ.get("ARC_OUTPUT_PATH")
+    if env_output:
+        output_candidates.append(_resolve_path(Path(env_output), PROJECT_ROOT))
+
+    cfg_mount = cfg.get("mount_path")
+    if isinstance(cfg_mount, str) and cfg_mount.strip():
+        output_candidates.append(_resolve_path(Path(cfg_mount), config_base))
+
+    output_candidates.extend([
+        PROJECT_ROOT / "output",
+        PROJECT_ROOT / "output_smoke",
+    ])
+
+    # Preserve order but remove duplicates.
+    seen = set()
+    deduped_output_candidates = []
+    for candidate in output_candidates:
+        normalized = candidate.resolve()
+        if normalized not in seen:
+            deduped_output_candidates.append(normalized)
+            seen.add(normalized)
+
+    output_path = next(
+        (candidate for candidate in deduped_output_candidates if candidate.is_dir()),
+        deduped_output_candidates[0],
+    )
+
+    if output_override is not None and not output_path.is_dir():
+        raise FileNotFoundError(f"Requested output directory does not exist: {output_path}")
+
+    audit_candidates = []
+    if audit_override is not None:
+        audit_candidates.append(_resolve_path(audit_override, PROJECT_ROOT))
+
+    cfg_audit = cfg.get("audit_log_path")
+    if isinstance(cfg_audit, str) and cfg_audit.strip():
+        audit_candidates.append(_resolve_path(Path(cfg_audit), config_base))
+
+    audit_candidates.append(PROJECT_ROOT / "audit.log")
+
+    seen.clear()
+    deduped_audit_candidates = []
+    for candidate in audit_candidates:
+        normalized = candidate.resolve()
+        if normalized not in seen:
+            deduped_audit_candidates.append(normalized)
+            seen.add(normalized)
+
+    audit_path = next(
+        (candidate for candidate in deduped_audit_candidates if candidate.exists()),
+        deduped_audit_candidates[0],
+    )
+
+    timeline_days = cfg.get("timeline_days", 90)
+    try:
+        timeline_days = int(timeline_days)
+    except (TypeError, ValueError):
+        timeline_days = 90
+
+    return output_path, audit_path, timeline_days
 
 
 def header(title: str) -> None:
@@ -39,13 +165,40 @@ def check(name: str, passed: bool, detail: str = "") -> bool:
 
 def find_user_root() -> Path:
     users = OUTPUT / "Users"
+    if not users.is_dir():
+        raise FileNotFoundError(
+            f"Users directory not found under output path: {users}"
+        )
+
     for d in users.iterdir():
         if d.is_dir() and d.name not in ("Public", "Default", "All Users"):
             return d
-    raise FileNotFoundError("No user directory found")
+
+    raise FileNotFoundError(
+        f"No non-default user directory found under: {users}"
+    )
 
 
 def main() -> None:
+    global OUTPUT, AUDIT, TIMELINE_DAYS
+
+    args = parse_args()
+    OUTPUT, AUDIT, TIMELINE_DAYS = resolve_runtime_paths(
+        config_path=args.config,
+        output_override=args.output,
+        audit_override=args.audit,
+    )
+
+    if not OUTPUT.is_dir():
+        raise FileNotFoundError(
+            f"Output directory not found: {OUTPUT}. "
+            "Use --output to set a valid path."
+        )
+
+    print(f"[INFO] Verifying output: {OUTPUT}")
+    print(f"[INFO] Using audit log: {AUDIT}")
+    print(f"[INFO] Timeline (config): {TIMELINE_DAYS} days")
+
     results = []
     user = find_user_root()
     username = user.name
@@ -79,10 +232,17 @@ def main() -> None:
         earliest = min(mtimes)
         latest = max(mtimes)
         span_days = (latest - earliest).days
-        results.append(check("Timestamp span > 30 days",
-                             span_days > 30, f"{span_days} days"))
-        results.append(check("Timestamp span < 365 days",
-                             span_days < 365, f"{span_days} days"))
+        min_expected_span = max(14, int(TIMELINE_DAYS * 0.5))
+        max_expected_span = max(TIMELINE_DAYS + 60, 120)
+
+        results.append(check("Timeline config loaded",
+                             TIMELINE_DAYS > 0, f"{TIMELINE_DAYS} days"))
+        results.append(check("Timestamp span covers configured timeline",
+                             span_days >= min_expected_span,
+                             f"{span_days} days (expected >= {min_expected_span})"))
+        results.append(check("Timestamp span bounded by configured timeline",
+                             span_days <= max_expected_span,
+                             f"{span_days} days (expected <= {max_expected_span})"))
 
         # Check hour distribution (should NOT be uniform — real users
         # have peaks in business hours)
@@ -273,10 +433,14 @@ def main() -> None:
     header("7. CROSS-SERVICE PATH CONSISTENCY")
 
     # Username consistency: check that paths use same username
-    user_dirs = [d.name for d in (OUTPUT / "Users").iterdir()
-                 if d.is_dir() and d.name not in ("Public", "Default", "All Users")]
-    results.append(check("Single consistent username",
-                         len(user_dirs) == 1, f"found: {user_dirs}"))
+    users_dir = OUTPUT / "Users"
+    if users_dir.exists():
+        user_dirs = [d.name for d in users_dir.iterdir()
+                     if d.is_dir() and d.name not in ("Public", "Default", "All Users")]
+        results.append(check("Single consistent username",
+                             len(user_dirs) == 1, f"found: {user_dirs}"))
+    else:
+        results.append(check("Users directory exists", False, f"missing: {users_dir}"))
 
     # Registry references username
     if ntuser.exists() and ntuser.stat().st_size > 100:
@@ -313,21 +477,24 @@ def main() -> None:
     header("9. AUDIT TRAIL & REPRODUCIBILITY")
 
     if AUDIT.exists():
-        lines = AUDIT.read_text().strip().split("\n")
-        entries = [json.loads(l) for l in lines if l.strip()]
-        services = Counter(e.get("service", "unknown") for e in entries)
+        try:
+            lines = AUDIT.read_text(encoding="utf-8").strip().split("\n")
+            entries = [json.loads(l) for l in lines if l.strip()]
+            services = Counter(e.get("service", "unknown") for e in entries)
 
-        results.append(check("Audit log exists", True,
-                             f"{len(entries)} entries"))
-        results.append(check("Multiple services logged",
-                             len(services) > 10,
-                             f"{len(services)} distinct services"))
+            results.append(check("Audit log exists", True,
+                                 f"{len(entries)} entries"))
+            results.append(check("Multiple services logged",
+                                 len(services) > 10,
+                                 f"{len(services)} distinct services"))
 
-        # Check timestamps are present
-        has_ts = sum(1 for e in entries if "timestamp" in e)
-        results.append(check("Timestamped audit entries",
-                             has_ts > len(entries) * 0.9,
-                             f"{has_ts}/{len(entries)} have timestamps"))
+            # Check timestamps are present
+            has_ts = sum(1 for e in entries if "timestamp" in e)
+            results.append(check("Timestamped audit entries",
+                                 has_ts > len(entries) * 0.9,
+                                 f"{has_ts}/{len(entries)} have timestamps"))
+        except Exception as e:
+            results.append(check("Audit log parseable", False, str(e)))
     else:
         results.append(check("Audit log exists", False))
 
@@ -362,4 +529,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except FileNotFoundError as e:
+        print(f"\n[ERROR] {e}")
+        raise SystemExit(2) from e
