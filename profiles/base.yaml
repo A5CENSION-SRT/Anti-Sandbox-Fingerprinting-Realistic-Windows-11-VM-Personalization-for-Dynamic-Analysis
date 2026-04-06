@@ -11,4 +11,4 @@ browsing:
 work_hours:
   start: 9
   end: 17
-  active_days: [1, 2, 3, 4, 5]
+  active_days: [0, 1, 2, 3, 4]

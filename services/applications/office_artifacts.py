@@ -141,7 +141,6 @@ class OfficeArtifacts(BaseService):
         self._create_office_dirs(user_root)
         self._create_templates(user_root)
         self._create_recent_shortcuts(user_root, profile, rng)
-        self._create_documents(user_root, profile)
 
         self._audit.log({
             "service": self.service_name,
@@ -191,19 +190,4 @@ class OfficeArtifacts(BaseService):
             "operation": "create_recent_shortcuts",
             "path": str(recent_dir),
             "shortcut_count": len(docs),
-        })
-
-    def _create_documents(self, user_root: str, profile: str) -> None:
-        """Create zero-byte placeholder document files."""
-        docs = _PROFILE_DOCUMENTS.get(profile, _PROFILE_DOCUMENTS["home_user"])
-        for doc in docs:
-            doc_dir = self._mount.resolve(
-                os.path.join(user_root, doc["subdir"]),
-            )
-            doc_dir.mkdir(parents=True, exist_ok=True)
-            (doc_dir / doc["name"]).touch(exist_ok=True)
-        self._audit.log({
-            "service": self.service_name,
-            "operation": "create_documents",
-            "document_count": len(docs),
         })

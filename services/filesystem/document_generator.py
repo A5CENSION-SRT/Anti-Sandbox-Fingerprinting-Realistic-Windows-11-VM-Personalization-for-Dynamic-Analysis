@@ -68,6 +68,11 @@ _PROFILE_DOCUMENTS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "Policy_Document.pdf", "type": "pdf", "size": (65536, 262144)},
         {"name": "Training_Manual.pdf", "type": "pdf", "size": (131072, 524288)},
         {"name": "team_contacts.txt", "type": "txt", "content": "contacts"},
+        {"name": "Annual_Review_Presentation.pptx", "type": "txt", "content": "notes"},
+        {"name": "Team_Meeting_Agenda.docx", "type": "docx", "size": (8192, 32768)},
+        {"name": "Client_Proposal_Draft.docx", "type": "docx", "size": (16384, 65536)},
+        {"name": "Expense_Report_March.xlsx", "type": "xlsx", "size": (4096, 16384)},
+        {"name": "Sales_Dashboard.xlsx", "type": "xlsx", "size": (4096, 16384)},
     ],
     "developer": [
         {"name": "README.md", "type": "txt", "content": "readme"},
@@ -78,6 +83,10 @@ _PROFILE_DOCUMENTS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "config.json", "type": "json", "content": "config"},
         {"name": "test_report.pdf", "type": "pdf", "size": (4096, 16384)},
         {"name": "database_schema.docx", "type": "docx", "size": (8192, 32768)},
+        {"name": "API_Documentation.docx", "type": "docx", "size": (16384, 65536)},
+        {"name": "Sprint_Tracking.xlsx", "type": "xlsx", "size": (4096, 16384)},
+        {"name": "Architecture_Design.docx", "type": "docx", "size": (16384, 65536)},
+        {"name": "Test_Results_Q1.xlsx", "type": "xlsx", "size": (4096, 16384)},
     ],
     "home_user": [
         {"name": "Shopping_List.txt", "type": "txt", "content": "shopping"},
@@ -87,6 +96,8 @@ _PROFILE_DOCUMENTS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "addresses.txt", "type": "txt", "content": "addresses"},
         {"name": "notes.txt", "type": "txt", "content": "notes"},
         {"name": "Photo_Album_2024.pdf", "type": "pdf", "size": (262144, 1048576)},
+        {"name": "Household_Budget.xlsx", "type": "xlsx", "size": (4096, 16384)},
+        {"name": "Vacation_Itinerary.docx", "type": "docx", "size": (8192, 32768)},
     ],
 }
 
@@ -474,44 +485,164 @@ class DocumentGenerator(BaseService):
         rng: Random,
         size_range: Tuple[int, int],
     ) -> bytes:
-        """Generate a minimal DOCX-like file."""
-        target_size = rng.randint(*size_range)
-        # DOCX is a ZIP file - generate valid ZIP header + padding
-        content = _DOCX_HEADER + b"\x00" * (target_size - len(_DOCX_HEADER))
-        return content
+        """Generate a structurally valid DOCX file (ZIP with OOXML content)."""
+        import io
+        import zipfile
+
+        # Generate some paragraphs of lorem-like text
+        sentences = [
+            "The quarterly results exceeded expectations across all divisions.",
+            "Please review the attached document before the meeting on Friday.",
+            "Budget allocations for the next fiscal year have been finalized.",
+            "The team has made significant progress on the project deliverables.",
+            "All stakeholders should provide feedback by end of business today.",
+            "The implementation timeline has been updated to reflect new requirements.",
+            "Revenue growth remained steady at approximately four percent year over year.",
+            "Customer satisfaction scores improved significantly in the latest survey.",
+        ]
+        body_paragraphs = ""
+        num_paras = rng.randint(3, 12)
+        for _ in range(num_paras):
+            text = rng.choice(sentences)
+            body_paragraphs += f'<w:p><w:r><w:t>{text}</w:t></w:r></w:p>'
+
+        content_types = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '</Types>'
+        )
+        rels = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+            '</Relationships>'
+        )
+        document = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f'<w:body>{body_paragraphs}</w:body>'
+            '</w:document>'
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("[Content_Types].xml", content_types)
+            zf.writestr("_rels/.rels", rels)
+            zf.writestr("word/document.xml", document)
+        return buf.getvalue()
 
     def _generate_xlsx_stub(
         self,
         rng: Random,
         size_range: Tuple[int, int],
     ) -> bytes:
-        """Generate a minimal XLSX-like file."""
-        target_size = rng.randint(*size_range)
-        content = _XLSX_HEADER + b"\x00" * (target_size - len(_XLSX_HEADER))
-        return content
+        """Generate a structurally valid XLSX file (ZIP with OOXML content)."""
+        import io
+        import zipfile
+
+        # Generate some spreadsheet rows
+        rows = ""
+        num_rows = rng.randint(5, 20)
+        for r in range(1, num_rows + 1):
+            val = rng.randint(100, 99999)
+            rows += f'<row r="{r}"><c r="A{r}" t="n"><v>{val}</v></c><c r="B{r}" t="inlineStr"><is><t>Item {r}</t></is></c></row>'
+
+        content_types = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            '</Types>'
+        )
+        rels = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            '</Relationships>'
+        )
+        workbook = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>'
+            '</workbook>'
+        )
+        wb_rels = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+            '</Relationships>'
+        )
+        sheet = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            f'<sheetData>{rows}</sheetData>'
+            '</worksheet>'
+        )
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("[Content_Types].xml", content_types)
+            zf.writestr("_rels/.rels", rels)
+            zf.writestr("xl/workbook.xml", workbook)
+            zf.writestr("xl/_rels/workbook.xml.rels", wb_rels)
+            zf.writestr("xl/worksheets/sheet1.xml", sheet)
+        return buf.getvalue()
 
     def _generate_pdf_stub(
         self,
         rng: Random,
         size_range: Tuple[int, int],
     ) -> bytes:
-        """Generate a minimal PDF-like file."""
-        target_size = rng.randint(*size_range)
-        # Basic PDF structure
-        pdf_content = _PDF_HEADER
-        pdf_content += b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-        pdf_content += b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n"
-        pdf_content += b"xref\n0 3\n"
-        pdf_content += b"0000000000 65535 f \n"
-        pdf_content += b"0000000015 00000 n \n"
-        pdf_content += b"0000000068 00000 n \n"
-        pdf_content += b"trailer\n<< /Root 1 0 R /Size 3 >>\n"
-        pdf_content += b"startxref\n120\n%%EOF"
+        """Generate a structurally valid PDF file with correct xref."""
+        # Build PDF objects with tracked offsets
+        parts: list = []
+        offsets: list = []
 
-        # Pad to target size
+        parts.append(b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\n")
+
+        # Object 1: Catalog
+        offsets.append(len(b"".join(parts)))
+        parts.append(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n")
+
+        # Object 2: Pages
+        offsets.append(len(b"".join(parts)))
+        parts.append(b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n")
+
+        # Object 3: Page
+        offsets.append(len(b"".join(parts)))
+        parts.append(b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>\nendobj\n")
+
+        # xref
+        xref_offset = len(b"".join(parts))
+        xref = b"xref\n0 4\n"
+        xref += b"0000000000 65535 f \n"
+        for off in offsets:
+            xref += f"{off:010d} 00000 n \n".encode()
+
+        trailer = f"trailer\n<< /Root 1 0 R /Size 4 >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
+
+        pdf_content = b"".join(parts) + xref + trailer
+
+        # Pad to minimum target size if needed
+        target_size = rng.randint(*size_range)
         if len(pdf_content) < target_size:
-            # Insert padding before %%EOF
-            padding = b" " * (target_size - len(pdf_content))
-            pdf_content = pdf_content[:-6] + padding + b"%%EOF\n"
+            # Add a padded comment stream before xref
+            padding_needed = target_size - len(pdf_content)
+            pad_comment = b"% " + b"x" * (padding_needed - 3) + b"\n"
+            # Rebuild with padding before xref
+            body = b"".join(parts) + pad_comment
+            xref_offset = len(body)
+            xref = b"xref\n0 4\n"
+            xref += b"0000000000 65535 f \n"
+            for off in offsets:
+                xref += f"{off:010d} 00000 n \n".encode()
+            trailer = f"trailer\n<< /Root 1 0 R /Size 4 >>\nstartxref\n{xref_offset}\n%%EOF\n".encode()
+            pdf_content = body + xref + trailer
 
         return pdf_content
+

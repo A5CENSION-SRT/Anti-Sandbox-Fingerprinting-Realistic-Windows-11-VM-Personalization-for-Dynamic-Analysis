@@ -64,36 +64,39 @@ _FILE_ATTRIBUTE_ARCHIVE = 0x00000020
 _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 
 # Profile-specific recent files
+# Profile-specific recent files — names/paths MUST match DocumentGenerator,
+# MediaStubService, and UserDirectoryService output for cross-reference
+# coherence.
 _PROFILE_RECENT_FILES: Dict[str, List[Dict[str, Any]]] = {
     "home_user": [
-        {"name": "vacation_photos.jpg", "path": r"C:\Users\{username}\Pictures\vacation_photos.jpg"},
-        {"name": "family_video.mp4", "path": r"C:\Users\{username}\Videos\family_video.mp4"},
-        {"name": "shopping_list.txt", "path": r"C:\Users\{username}\Documents\shopping_list.txt"},
-        {"name": "budget_2024.xlsx", "path": r"C:\Users\{username}\Documents\budget_2024.xlsx"},
-        {"name": "recipe_collection.docx", "path": r"C:\Users\{username}\Documents\recipe_collection.docx"},
+        {"name": "IMG_20240115_vacation.jpg", "path": r"C:\Users\{username}\Pictures\IMG_20240115_vacation.jpg"},
+        {"name": "birthday_2024.mp4", "path": r"C:\Users\{username}\Videos\birthday_2024.mp4"},
+        {"name": "Shopping_List.txt", "path": r"C:\Users\{username}\Documents\Shopping_List.txt"},
+        {"name": "Budget.xlsx", "path": r"C:\Users\{username}\Documents\Budget.xlsx"},
+        {"name": "Recipe_Collection.docx", "path": r"C:\Users\{username}\Documents\Recipe_Collection.docx"},
+        {"name": "Vacation_Plan.docx", "path": r"C:\Users\{username}\Documents\Vacation_Plan.docx"},
         {"name": "Downloads", "path": r"C:\Users\{username}\Downloads", "is_dir": True},
         {"name": "Pictures", "path": r"C:\Users\{username}\Pictures", "is_dir": True},
     ],
     "office_user": [
-        {"name": "Q4_Report.docx", "path": r"C:\Users\{username}\Documents\Work\Q4_Report.docx"},
-        {"name": "Budget_Analysis.xlsx", "path": r"C:\Users\{username}\Documents\Work\Budget_Analysis.xlsx"},
-        {"name": "Project_Timeline.xlsx", "path": r"C:\Users\{username}\Documents\Work\Project_Timeline.xlsx"},
-        {"name": "Meeting_Notes.docx", "path": r"C:\Users\{username}\Documents\Work\Meeting_Notes.docx"},
-        {"name": "Presentation.pptx", "path": r"C:\Users\{username}\Documents\Work\Presentation.pptx"},
-        {"name": "client_data.csv", "path": r"C:\Users\{username}\Documents\Work\client_data.csv"},
-        {"name": "policy_update.pdf", "path": r"C:\Users\{username}\Documents\Work\policy_update.pdf"},
-        {"name": "Work", "path": r"C:\Users\{username}\Documents\Work", "is_dir": True},
+        {"name": "Q4_Report_2024.docx", "path": r"C:\Users\{username}\Documents\Q4_Report_2024.docx"},
+        {"name": "Budget_FY2025.xlsx", "path": r"C:\Users\{username}\Documents\Budget_FY2025.xlsx"},
+        {"name": "Project_Timeline.xlsx", "path": r"C:\Users\{username}\Documents\Project_Timeline.xlsx"},
+        {"name": "Meeting_Notes.txt", "path": r"C:\Users\{username}\Documents\Meeting_Notes.txt"},
+        {"name": "Client_Proposal.docx", "path": r"C:\Users\{username}\Documents\Client_Proposal.docx"},
+        {"name": "Policy_Document.pdf", "path": r"C:\Users\{username}\Documents\Policy_Document.pdf"},
+        {"name": "Expense_Report.xlsx", "path": r"C:\Users\{username}\Documents\Expense_Report.xlsx"},
+        {"name": "Documents", "path": r"C:\Users\{username}\Documents", "is_dir": True},
     ],
     "developer": [
-        {"name": "README.md", "path": r"C:\Users\{username}\Projects\README.md"},
-        {"name": "config.yaml", "path": r"C:\Users\{username}\Projects\config.yaml"},
-        {"name": "main.py", "path": r"C:\Users\{username}\Projects\main.py"},
-        {"name": "package.json", "path": r"C:\Users\{username}\Projects\package.json"},
-        {"name": "docker-compose.yml", "path": r"C:\Users\{username}\Projects\docker-compose.yml"},
-        {"name": ".env", "path": r"C:\Users\{username}\Projects\.env"},
-        {"name": "requirements.txt", "path": r"C:\Users\{username}\Projects\requirements.txt"},
-        {"name": "Projects", "path": r"C:\Users\{username}\Projects", "is_dir": True},
-        {"name": "GitHub", "path": r"C:\Users\{username}\Documents\GitHub", "is_dir": True},
+        {"name": "README.md", "path": r"C:\Users\{username}\Documents\README.md"},
+        {"name": "ARCHITECTURE.md", "path": r"C:\Users\{username}\Documents\ARCHITECTURE.md"},
+        {"name": "Sprint_Notes.txt", "path": r"C:\Users\{username}\Documents\Sprint_Notes.txt"},
+        {"name": "requirements.txt", "path": r"C:\Users\{username}\Documents\requirements.txt"},
+        {"name": "config.json", "path": r"C:\Users\{username}\Documents\config.json"},
+        {"name": "API_Spec.docx", "path": r"C:\Users\{username}\Documents\API_Spec.docx"},
+        {"name": "source", "path": r"C:\Users\{username}\source\repos", "is_dir": True},
+        {"name": "Documents", "path": r"C:\Users\{username}\Documents", "is_dir": True},
     ],
 }
 
@@ -196,6 +199,8 @@ class RecentItemsService(BaseService):
 
             # Create some Jump List files in AutomaticDestinations
             self._create_jump_lists(recent_dir / "AutomaticDestinations", rng)
+            # Also populate CustomDestinations with jump list stubs
+            self._create_jump_lists(recent_dir / "CustomDestinations", rng)
 
             self._audit.log({
                 "service": self.service_name,
