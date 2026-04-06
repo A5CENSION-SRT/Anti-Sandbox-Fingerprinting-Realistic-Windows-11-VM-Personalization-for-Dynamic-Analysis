@@ -1,0 +1,66 @@
+Generate {seed_count} download record seeds for this user persona. Each seed will be expanded into many download variations.
+
+**Persona**:
+- Name: {full_name}
+- Occupation: {occupation}
+- Organization: {organization}
+- Tech Proficiency: {tech_proficiency}
+- Interests: {interests}
+- Typical Tools: {tools}
+
+Output ONLY a JSON array of download seeds:
+
+```json
+[
+  {{
+    "seed_id": "dl_001",
+    "filename_pattern": "Report_{{quarter}}_{{year}}.pdf",
+    "url_template": "https://example.com/reports/{{quarter}}_{{year}}.pdf",
+    "referrer_template": "https://example.com/dashboard",
+    "mime_type": "application/pdf",
+    "size_range_bytes": [102400, 2097152],
+    "context": "Quarterly performance reports downloaded from company dashboard",
+    "variables": {{
+      "quarter": ["Q1", "Q2", "Q3", "Q4"],
+      "year": ["2023", "2024"]
+    }},
+    "expansion": {{
+      "target_count": 50,
+      "date_range_days": 90,
+      "include_versions": true,
+      "include_drafts": false,
+      "include_dates": true
+    }}
+  }}
+]
+```
+
+Include a diverse mix of:
+1. **Work-related** (if employed):
+   - Software installers for tools they use
+   - Documents from cloud services (SharePoint, Google Drive, Dropbox)
+   - Reports, presentations, spreadsheets
+   - Meeting recordings or attachments
+
+2. **Personal**:
+   - Apps matching their hobbies/interests
+   - Media files (music, videos, images)
+   - E-commerce receipts/invoices
+   - Personal documents
+
+3. **Utility**:
+   - Browser extensions
+   - System updates
+   - Drivers
+   - Productivity tools
+
+For each seed, provide realistic:
+- **filename_pattern**: Use {{variable}} syntax for expandable parts
+- **url_template**: Realistic download URLs
+- **referrer_template**: Where they clicked from
+- **mime_type**: Correct MIME type
+- **size_range_bytes**: [min, max] realistic file sizes
+- **variables**: Dict of variable name → possible values
+- **expansion**: How many files to generate from this seed
+
+Target: Seeds should expand to ~{total_downloads} total downloads when permuted.

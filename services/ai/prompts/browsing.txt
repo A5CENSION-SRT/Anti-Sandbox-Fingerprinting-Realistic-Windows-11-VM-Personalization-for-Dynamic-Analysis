@@ -1,0 +1,119 @@
+Generate browsing behavior seeds for this user persona.
+
+**Persona**:
+- Name: {full_name}
+- Occupation: {occupation}
+- Organization: {organization}
+- Tech Proficiency: {tech_proficiency}
+- Hobbies: {hobbies}
+- Professional Topics: {professional_topics}
+- Entertainment Preferences: {entertainment}
+- Work Hours: {work_hours_start}:00 - {work_hours_end}:00
+- Active Days: {active_days}
+
+Output ONLY valid JSON with this structure:
+
+```json
+{{
+  "seed_id": "browsing_main",
+  "url_patterns": [
+    {{
+      "url": "https://mail.google.com/",
+      "title": "Gmail - Inbox",
+      "frequency": "multiple_daily",
+      "typical_times": ["09:00-10:00", "12:00-13:00", "17:00-18:00"],
+      "context": "Primary email for work communication",
+      "generates_downloads": false
+    }},
+    {{
+      "url": "https://www.linkedin.com/feed/",
+      "title": "LinkedIn",
+      "frequency": "daily",
+      "typical_times": ["08:30-09:00", "12:30-13:00"],
+      "context": "Professional networking and industry news",
+      "generates_downloads": false
+    }}
+  ],
+  "search_term_themes": [
+    "how to {{task}} in {{tool}}",
+    "{{product}} review 2024",
+    "best {{category}} for {{use_case}}",
+    "{{topic}} tutorial",
+    "{{error_message}} fix"
+  ],
+  "bookmark_categories": {{
+    "Work": [
+      "https://outlook.office365.com/",
+      "https://teams.microsoft.com/"
+    ],
+    "News": [
+      "https://news.ycombinator.com/",
+      "https://www.reuters.com/"
+    ],
+    "Shopping": [
+      "https://www.amazon.com/",
+      "https://www.target.com/"
+    ]
+  }},
+  "context": "Marketing professional who checks email frequently",
+  "expansion": {{
+    "target_count": 7500,
+    "date_range_days": 90,
+    "include_versions": false,
+    "include_drafts": false,
+    "include_dates": true
+  }}
+}}
+```
+
+Generate:
+
+1. **URL Patterns** (50-100 URLs):
+   Include realistic mix based on persona:
+   
+   **Work-related** (if employed):
+   - Email (Gmail, Outlook)
+   - Collaboration (Slack, Teams, Zoom)
+   - Cloud storage (Drive, Dropbox, OneDrive)
+   - Industry-specific tools
+   - News in their field
+   
+   **Personal**:
+   - Social media matching demographics
+   - Entertainment (Netflix, YouTube, Spotify)
+   - Shopping sites
+   - Banking/finance
+   - Hobby-related sites
+   
+   **Utility**:
+   - Search engines
+   - Weather
+   - Maps
+   - Reference sites
+
+   For each URL, specify:
+   - **frequency**: multiple_daily, daily, weekly, biweekly, monthly, occasional
+   - **typical_times**: When they visit (work hours for work sites, evenings for personal)
+   - **context**: Why they visit
+   - **generates_downloads**: true if visits spawn download records
+
+2. **Search Term Themes** (30-50 themes):
+   Templates with {{variables}} that expand into hundreds of searches:
+   - Work queries ("how to {{task}} in Excel")
+   - Product research ("best {{product}} 2024")
+   - Troubleshooting ("{{software}} not working")
+   - Learning ("{{topic}} tutorial for beginners")
+   - Entertainment ("{{show}} season 2 release date")
+   - Shopping ("{{product}} deals")
+
+3. **Bookmark Categories** (5-10 folders, 3-8 URLs each):
+   Organized folders reflecting their workflow:
+   - Work tools
+   - News/reading
+   - Shopping
+   - Entertainment
+   - Hobbies
+   - Finance
+   - Reference
+
+Target: ~{total_history} browser history entries when expanded.

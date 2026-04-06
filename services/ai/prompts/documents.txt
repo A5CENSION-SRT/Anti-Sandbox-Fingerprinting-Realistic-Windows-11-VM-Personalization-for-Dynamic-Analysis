@@ -1,0 +1,77 @@
+Generate {seed_count} document seeds for this user persona. Each seed will be expanded into many document variations.
+
+**Persona**:
+- Name: {full_name}
+- Occupation: {occupation}
+- Organization: {organization}
+- Department: {department}
+- Projects: {projects}
+- Colleagues: {colleagues}
+- Work Style: {work_style}
+
+Output ONLY a JSON array of document seeds:
+
+```json
+[
+  {{
+    "seed_id": "doc_001",
+    "filename_pattern": "{{project}}_Status_Report_{{date}}.docx",
+    "document_type": "docx",
+    "category": "work",
+    "content_theme": "Weekly project status update with milestones, blockers, and next steps",
+    "content_template": "# {{project}} Status Report\\n\\nDate: {{date}}\\nPrepared by: {{author}}\\n\\n## Summary\\n{{summary}}\\n\\n## This Week\\n{{accomplishments}}\\n\\n## Blockers\\n{{blockers}}\\n\\n## Next Week\\n{{next_steps}}",
+    "variables": {{
+      "project": ["Project Alpha", "Website Redesign", "Q4 Campaign"],
+      "author": ["Sarah Chen", "Marketing Team"],
+      "summary": ["On track for Q4 delivery", "Minor delays due to resource constraints"],
+      "accomplishments": ["Completed user research", "Finalized design mockups"],
+      "blockers": ["Awaiting legal review", "Pending vendor response"],
+      "next_steps": ["Begin development sprint", "Schedule stakeholder review"]
+    }},
+    "subfolder": "Documents/Work",
+    "expansion": {{
+      "target_count": 100,
+      "date_range_days": 90,
+      "include_versions": true,
+      "include_drafts": true,
+      "include_dates": true
+    }}
+  }}
+]
+```
+
+Include a diverse mix across categories:
+
+1. **Work Documents** (if employed):
+   - Reports (status, quarterly, annual)
+   - Meeting notes and agendas
+   - Project plans and timelines
+   - Presentations
+   - Spreadsheets (budgets, tracking, data)
+   - Proposals and briefs
+   - Policies and procedures
+
+2. **Personal Documents**:
+   - Lists (shopping, todo, travel)
+   - Personal notes and journals
+   - Recipes
+   - Letters
+   - Financial records
+   - Travel itineraries
+
+3. **Creative/Technical** (based on interests):
+   - For developers: READMEs, specs, configs
+   - For creatives: scripts, outlines, mood boards
+   - For hobbyists: project notes, guides
+
+For each seed, provide:
+- **filename_pattern**: Use {{variable}} syntax
+- **document_type**: docx, xlsx, pdf, txt, md, json
+- **category**: work, personal, financial, creative, technical
+- **content_theme**: What the document is about
+- **content_template**: Optional Jinja2-style template for content generation
+- **variables**: Dict of variable name → possible values
+- **subfolder**: Where to place (Documents, Documents/Work, etc.)
+- **expansion**: Target count and variation rules
+
+Target: Seeds should expand to ~{total_documents} total documents.

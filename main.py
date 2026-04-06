@@ -36,6 +36,14 @@ from typing import Any, Dict, Optional
 
 import yaml
 
+# Load .env files early
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+    load_dotenv(Path(__file__).parent / "services" / "ai" / ".env")
+except ImportError:
+    pass  # dotenv not installed, rely on environment variables
+
 from core.audit_logger import AuditLogger
 from core.orchestrator import Orchestrator, OrchestrationError
 from core.vm_manager import VMManager, VMManagerError
@@ -52,7 +60,6 @@ _DEFAULT_OUTPUT = "./output"
 _SERVICE_MODULES = {
     "filesystem": [
         ("services.filesystem.user_directory", "UserDirectoryService"),
-        ("services.filesystem.system_content_populator", "SystemContentPopulator"),
         ("services.filesystem.installed_apps_stub", "InstalledAppsStub"),
         ("services.filesystem.document_generator", "DocumentGenerator"),
         ("services.filesystem.media_stub", "MediaStubService"),
@@ -325,6 +332,35 @@ def parse_args() -> argparse.Namespace:
         help="Path to Windows 11 VHDX to mount and infect",
     )
 
+    # AI Generation options
+    parser.add_argument(
+        "--ai-generate",
+        action="store_true",
+        help="Use AI (Gemini) to generate personalized profile instead of static templates",
+    )
+
+    parser.add_argument(
+        "--occupation",
+        type=str,
+        default=None,
+        help="Occupation for AI profile generation (e.g., 'Software Engineer')",
+    )
+
+    parser.add_argument(
+        "--interests",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Interests/hobbies for AI profile generation",
+    )
+
+    parser.add_argument(
+        "--location",
+        type=str,
+        default=None,
+        help="Location hint for AI profile generation",
+    )
+
     parser.add_argument(
         "--version",
         action="version",
@@ -458,6 +494,78 @@ def main() -> int:
         logger.debug("Loading config from: %s", args.config)
         config = load_config(args.config)
         config = merge_cli_args(config, args)
+        
+        # ---------------------------------------------------------------------------
+        # AI Profile Generation Mode
+        # ---------------------------------------------------------------------------
+        if getattr(args, 'ai_generate', False):
+            logger.info("AI Profile Generation Mode enabled")
+            
+            occupation = getattr(args, 'occupation', None)
+            if not occupation:
+                logger.error("--occupation is required when using --ai-generate")
+                print("\nError: --occupation is required for AI generation.")
+                print("Example: python main.py --ai-generate --occupation 'Software Engineer'")
+                return 2
+            
+            try:
+                from services.ai.ai_orchestrator import AIOrchestrator
+                
+                # Create AI orchestrator
+                ai_output_dir = Path(config.get("profiles_dir", "profiles/generated"))
+                ai_orchestrator = AIOrchestrator.from_config(config, output_dir=ai_output_dir)
+                
+                print(f"\n{'='*60}")
+                print(" AI Profile Generation")
+                print(f"{'='*60}")
+                print(f" Occupation: {occupation}")
+                if args.location:
+                    print(f" Location:   {args.location}")
+                if args.interests:
+                    print(f" Interests:  {', '.join(args.interests)}")
+                print(f"{'='*60}\n")
+                
+                # Generate profile
+                result = ai_orchestrator.generate_profile(
+                    occupation=occupation,
+                    location=getattr(args, 'location', None),
+                    interests=getattr(args, 'interests', None),
+                )
+                
+                if result.success:
+                    print(f"\n✓ Generated persona: {result.persona.full_name}")
+                    print(f"  Username:     {result.persona.username}")
+                    print(f"  Organization: {result.persona.organization}")
+                    
+                    if result.profile_path:
+                        print(f"\n✓ Profile saved to: {result.profile_path}")
+                        
+                        # Update config to use the generated profile
+                        config["profile_path"] = str(result.profile_path)
+                        
+                        # Also override username if not already set
+                        if not args.override_username:
+                            config["override_username"] = result.persona.username
+                    
+                    if result.used_fallback:
+                        print(f"\n  ⚠ Used fallback generators (API unavailable)")
+                    
+                    print(f"\n  Generation time: {result.generation_time_ms:.1f}ms")
+                    print(f"\n{'='*60}")
+                    print(" Continuing with artifact generation using AI profile...")
+                    print(f"{'='*60}\n")
+                else:
+                    logger.error("AI profile generation failed: %s", result.errors)
+                    print(f"\n✗ AI generation failed:")
+                    for err in result.errors:
+                        print(f"  - {err}")
+                    return 1
+                    
+            except ImportError as e:
+                logger.error("AI modules not available: %s", e)
+                print(f"\nError: AI modules not available. Install dependencies:")
+                print("  pip install google-generativeai pydantic jinja2")
+                return 2
         
         # Determine if we are doing VM direct-injection
         if args.vhdx_path:
