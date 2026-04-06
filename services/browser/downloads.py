@@ -48,10 +48,19 @@ class BrowserDownloadService(BaseService):
         self._profile = profile_name
         self._username = username
         self._count = download_count
-        self._data_dir = (
-            Path(data_dir) if data_dir else
-            Path(__file__).resolve().parent.parent.parent / "data" / "wordlists"
-        )
+        if data_dir:
+            candidate = Path(data_dir)
+            # Accept both `data/wordlists` and project-level `data`.
+            if (candidate / "downloads_by_profile.json").exists():
+                self._data_dir = candidate
+            elif (candidate / "wordlists").is_dir():
+                self._data_dir = candidate / "wordlists"
+            else:
+                self._data_dir = candidate
+        else:
+            self._data_dir = (
+                Path(__file__).resolve().parent.parent.parent / "data" / "wordlists"
+            )
 
     @property
     def service_name(self) -> str:

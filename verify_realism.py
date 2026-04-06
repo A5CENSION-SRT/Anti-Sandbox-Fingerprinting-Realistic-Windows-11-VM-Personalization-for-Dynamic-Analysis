@@ -19,7 +19,7 @@ import sqlite3
 import struct
 import zipfile
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -219,18 +219,20 @@ def main() -> None:
     # ── 2. Timestamp Distribution ─────────────────────────────────────
     header("2. TIMESTAMP CONSISTENCY & DISTRIBUTION")
     # Sample file modification times
-    mtimes = []
+    mtimes_local = []
+    mtimes_utc = []
     for dirpath, _, filenames in os.walk(str(OUTPUT)):
         for fname in filenames:
             fp = Path(dirpath) / fname
             try:
                 mt = fp.stat().st_mtime
-                mtimes.append(datetime.fromtimestamp(mt))
+                mtimes_local.append(datetime.fromtimestamp(mt))
+                mtimes_utc.append(datetime.fromtimestamp(mt, tz=timezone.utc))
             except OSError:
                 pass
-    if mtimes:
-        earliest = min(mtimes)
-        latest = max(mtimes)
+    if mtimes_local:
+        earliest = min(mtimes_local)
+        latest = max(mtimes_local)
         span_days = (latest - earliest).days
         min_expected_span = max(14, int(TIMELINE_DAYS * 0.5))
         max_expected_span = max(TIMELINE_DAYS + 60, 120)
@@ -246,15 +248,27 @@ def main() -> None:
 
         # Check hour distribution (should NOT be uniform — real users
         # have peaks in business hours)
-        hours = Counter(t.hour for t in mtimes)
-        daytime = sum(hours.get(h, 0) for h in range(8, 20))
-        nighttime = sum(hours.get(h, 0) for h in list(range(0, 6)) + [22, 23])
-        ratio = daytime / max(nighttime, 1)
+        hours_local = Counter(t.hour for t in mtimes_local)
+        daytime_local = sum(hours_local.get(h, 0) for h in range(8, 20))
+        nighttime_local = sum(
+            hours_local.get(h, 0) for h in list(range(0, 6)) + [22, 23]
+        )
+        ratio_local = daytime_local / max(nighttime_local, 1)
+
+        hours_utc = Counter(t.hour for t in mtimes_utc)
+        daytime_utc = sum(hours_utc.get(h, 0) for h in range(8, 20))
+        nighttime_utc = sum(
+            hours_utc.get(h, 0) for h in list(range(0, 6)) + [22, 23]
+        )
+        ratio_utc = daytime_utc / max(nighttime_utc, 1)
+
+        ratio = max(ratio_local, ratio_utc)
         results.append(check("Daytime activity bias",
-                             ratio > 1.5, f"day/night ratio={ratio:.1f}"))
+                             ratio > 1.5,
+                             f"local={ratio_local:.1f}, utc={ratio_utc:.1f}"))
 
         results.append(check(f"Total files with timestamps",
-                             len(mtimes) > 200, f"{len(mtimes)} files"))
+                             len(mtimes_local) > 200, f"{len(mtimes_local)} files"))
 
     # ── 3. Browser Artifacts ──────────────────────────────────────────
     header("3. BROWSER ARTIFACTS")

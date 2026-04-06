@@ -342,14 +342,25 @@ class DocumentGenerator(BaseService):
         try:
             # Get documents for this profile
             documents = _PROFILE_DOCUMENTS.get(profile_type, [])
+            generated_pdf = False
+            available_pdf_count = sum(
+                1 for d in documents if d.get("type") == "pdf"
+            )
 
             for doc_spec in documents:
+                doc_type = doc_spec["type"]
+
                 # Randomly skip some documents for variety
                 if rng.random() < 0.1:
-                    continue
+                    # Keep at least one PDF when profile defines PDF artifacts.
+                    if not (
+                        doc_type == "pdf"
+                        and available_pdf_count > 0
+                        and not generated_pdf
+                    ):
+                        continue
 
                 file_path = docs_dir / doc_spec["name"]
-                doc_type = doc_spec["type"]
 
                 # Generate content based on type
                 if doc_type == "txt":
@@ -376,8 +387,22 @@ class DocumentGenerator(BaseService):
                     size_range = doc_spec.get("size", (8192, 32768))
                     content = self._generate_pdf_stub(rng, size_range)
                     self._write_file(file_path, content)
+                    generated_pdf = True
 
                 created_files.append(str(file_path))
+
+            # If all PDF entries were skipped by randomness, force-create one.
+            if available_pdf_count > 0 and not generated_pdf:
+                for doc_spec in documents:
+                    if doc_spec.get("type") != "pdf":
+                        continue
+                    file_path = docs_dir / doc_spec["name"]
+                    size_range = doc_spec.get("size", (8192, 32768))
+                    content = self._generate_pdf_stub(rng, size_range)
+                    self._write_file(file_path, content)
+                    created_files.append(str(file_path))
+                    generated_pdf = True
+                    break
 
             self._audit.log({
                 "service": self.service_name,

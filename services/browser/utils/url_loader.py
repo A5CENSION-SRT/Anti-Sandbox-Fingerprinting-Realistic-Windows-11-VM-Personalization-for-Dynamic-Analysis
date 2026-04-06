@@ -17,7 +17,16 @@ class UrlLoader:
 
     def __init__(self, data_dir: str | Path | None = None):
         if data_dir:
-            self._dir = Path(data_dir)
+            candidate = Path(data_dir)
+            # Accept both `data/wordlists` and project-level `data`.
+            if (candidate / "urls_by_category.json").exists() or (
+                candidate / "search_terms.txt"
+            ).exists():
+                self._dir = candidate
+            elif (candidate / "wordlists").is_dir():
+                self._dir = candidate / "wordlists"
+            else:
+                self._dir = candidate
         else:
             self._dir = (
                 Path(__file__).resolve().parent.parent.parent.parent
