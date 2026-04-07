@@ -560,6 +560,7 @@ def manual_workflow(config: Dict[str, Any]) -> None:
     # Ask if they want to mount a new drive
     mount_new = get_yes_no("\nMount a new VHD/VHDX?", default=False)
     mount_path = None
+    vm_manager = None
     
     if mount_new:
         vhdx_path = get_input("\nEnter path to VHD/VHDX file", required=True)
@@ -574,6 +575,7 @@ def manual_workflow(config: Dict[str, Any]) -> None:
             except Exception as e:
                 print(f"❌ Failed to mount: {e}")
                 mount_path = None
+                vm_manager = None
         else:
             print(f"❌ File not found: {vhdx_path}")
     
@@ -627,10 +629,14 @@ def manual_workflow(config: Dict[str, Any]) -> None:
     )
     
     # Step 4: Cleanup
-    if mount_path:
+    if mount_path and vm_manager:
         print_section("Step 4: Drive Cleanup")
         if get_yes_no("Dismount the VHD/VHDX?", default=True):
-            dismount_drive("Z")
+            try:
+                vm_manager.dismount_vhdx()
+                print("✅ Dismounted image successfully")
+            except Exception as e:
+                print(f"❌ Failed to dismount image: {e}")
         else:
             print("ℹ️  Drive left mounted for inspection")
     

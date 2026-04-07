@@ -30,6 +30,11 @@ class VMManager:
         # The drive letter assigned to the Windows partition after mounting
         self.mounted_drive: Optional[str] = None
 
+    @property
+    def _ps_image_path(self) -> str:
+        """Return PowerShell-safe image path wrapped for single quotes."""
+        return str(self.vhdx_path).replace("'", "''")
+
     def _run_powershell(self, command: str) -> str:
         """Execute a PowerShell command and return its stdout."""
         try:
@@ -44,6 +49,44 @@ class VMManager:
             logger.error(f"PowerShell command failed: {e.stderr.strip()}")
             raise VMManagerError(f"PowerShell error: {e.stderr.strip()}") from e
 
+    def _is_image_attached(self) -> bool:
+        """Return True when the VHD/VHDX is currently attached."""
+        script = f"""
+        $image = Get-DiskImage -ImagePath '{self._ps_image_path}' -ErrorAction SilentlyContinue
+        if (-not $image) {{
+            Write-Output 'false'
+            return
+        }}
+        Write-Output ([string]$image.Attached).ToLowerInvariant()
+        """
+        return self._run_powershell(script).strip() == "true"
+
+    def _discover_windows_drive(self) -> Optional[str]:
+        """Find the mounted drive letter containing the Windows folder."""
+        script = f"""
+        $image = Get-DiskImage -ImagePath '{self._ps_image_path}' -ErrorAction SilentlyContinue
+        if (-not $image -or -not $image.Attached) {{
+            return
+        }}
+
+        $volumes = $image |
+            Get-Disk -ErrorAction SilentlyContinue |
+            Get-Partition -ErrorAction SilentlyContinue |
+            Get-Volume -ErrorAction SilentlyContinue
+
+        foreach ($vol in $volumes) {{
+            if ($vol.DriveLetter) {{
+                $candidate = $vol.DriveLetter + ':\\'
+                if (Test-Path ($candidate + 'Windows')) {{
+                    Write-Output $candidate
+                    return
+                }}
+            }}
+        }}
+        """
+        drive = self._run_powershell(script)
+        return drive if drive else None
+
     def stop_vm(self, vm_name: str, force: bool = False) -> None:
         """Not supported on Windows Home (Hyper-V API required)."""
         logger.warning("VM Start/Stop automation requires Hyper-V. Ensure your VM is powered off manually.")
@@ -54,38 +97,37 @@ class VMManager:
         Returns:
             The drive letter of the Windows partition (e.g., 'E:\\').
         """
-        if self.mounted_drive:
+        if self.mounted_drive and Path(self.mounted_drive).exists():
             return self.mounted_drive
-            
-        logger.info("Mounting disk image: %s", self.vhdx_path)
-        
-        # Mount the disk image using generic Windows cmdlets (works on Home edition)
-        self._run_powershell(f"Mount-DiskImage -ImagePath '{self.vhdx_path}' -NoDriveLetter:$false")
-        time.sleep(3)  # Give Windows a moment to assign drive letters
-        
-        # Find the OS partition by looking for the Windows directory on newly attached volumes associated with this image
-        script = f"""
-        $image = Get-DiskImage -ImagePath '{self.vhdx_path}'
-        if (-not $image) {{ exit }}
-        
-        $volumes = $image | Get-Disk | Get-Partition | Get-Volume
-        
-        foreach ($vol in $volumes) {{
-            if ($vol.DriveLetter) {{
-                $testPath = $vol.DriveLetter + ":\\Windows"
-                if (Test-Path $testPath) {{
-                    Write-Output ($vol.DriveLetter + ":\\")
-                    exit
-                }}
-            }}
-        }}
-        """
-        
-        drive = self._run_powershell(script)
+
+        already_attached = self._is_image_attached()
+        mounted_by_this_call = False
+
+        if already_attached:
+            logger.info("Disk image already attached: %s", self.vhdx_path)
+        else:
+            logger.info("Mounting disk image: %s", self.vhdx_path)
+            try:
+                self._run_powershell(
+                    f"Mount-DiskImage -ImagePath '{self._ps_image_path}' -NoDriveLetter:$false"
+                )
+                mounted_by_this_call = True
+            except VMManagerError:
+                # Handle race: if another process attached after our pre-check,
+                # continue to drive discovery instead of failing hard.
+                if self._is_image_attached():
+                    logger.warning(
+                        "Mount command failed, but image is attached; proceeding to drive discovery."
+                    )
+                else:
+                    raise
+
+        time.sleep(2)
+        drive = self._discover_windows_drive()
         
         if not drive:
-            # Cleanup on failure
-            self.dismount_vhdx()
+            if mounted_by_this_call:
+                self.dismount_vhdx()
             raise VMManagerError("Failed to locate Windows partition on mounted VHDX.")
             
         logger.info("Discovered Windows partition at %s", drive)
@@ -96,7 +138,12 @@ class VMManager:
         """Dismount the VHDX file safely."""
         logger.info("Dismounting disk image: %s", self.vhdx_path)
         try:
-            self._run_powershell(f"Dismount-DiskImage -ImagePath '{self.vhdx_path}'")
+            if not self._is_image_attached():
+                self.mounted_drive = None
+                logger.info("Disk image already dismounted.")
+                return
+
+            self._run_powershell(f"Dismount-DiskImage -ImagePath '{self._ps_image_path}'")
             self.mounted_drive = None
             logger.info("Successfully dismounted image.")
         except VMManagerError as e:
