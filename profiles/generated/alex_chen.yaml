@@ -1,0 +1,76 @@
+extends: developer
+username: alex.chen
+organization: Personal
+locale: en_US
+installed_apps:
+  - vscode
+  - git
+  - docker
+  - terminal
+  - steam
+  - discord
+browsing:
+  categories:
+    - entertainment
+    - stackoverflow
+    - github
+    - documentation
+  daily_avg_sites: 35
+work_hours:
+  start: 9
+  end: 17
+  active_days:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+_ai_metadata:
+  generated_at: '2026-04-07T07:12:14.729143'
+  full_name: Alex Chen
+  email: alex.chen@gmail.com
+  occupation: Senior Software Engineer
+  department:
+  age_range: 25-32
+  location: Seattle, WA
+  tech_proficiency: high
+  project_names:
+    - Platform Upgrade
+    - Q4 Initiative
+    - Process Automation
+  colleague_names:
+    - Taylor Reed
+    - Morgan Patel
+    - Casey Nguyen
+    - Jordan Lee
+    - Sam Wilson
+_persona_interests:
+  hobbies:
+    - Full-stack development
+    - Competitive PC gaming
+    - Mechanical keyboards
+    - Home automation
+    - Cloud architecture
+  professional_topics:
+    - productivity
+    - industry trends
+  entertainment: []
+_work_style:
+  description: Senior Software Engineer with a practical workflow
+  typical_tools:
+    - VS Code
+    - Git
+    - Docker
+    - Terminal
+  collaboration_style: hybrid
+  meeting_frequency: moderate
+_seeds:
+  total_seed_count: 116
+  generated_at: '2026-04-07T07:12:14.729143'
+  gemini_model: gemini-3.1-flash-lite-preview
+  download_count: 20
+  document_count: 30
+  browsing_url_count: 25
+  browsing_search_theme_count: 30
+  filename_pattern_count: 11
+  media_count: 0

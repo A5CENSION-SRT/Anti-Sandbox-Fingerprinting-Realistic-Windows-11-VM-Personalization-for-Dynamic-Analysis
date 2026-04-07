@@ -1,0 +1,74 @@
+extends: home_user
+username: arjun.mehta
+organization: Personal
+locale: en_US
+installed_apps:
+  - chrome
+  - vscode
+  - git
+  - steam
+  - discord
+  - spotify
+  - vlc
+browsing:
+  categories:
+    - general
+    - entertainment
+    - news
+  daily_avg_sites: 23
+work_hours:
+  start: 9
+  end: 17
+  active_days:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+_ai_metadata:
+  generated_at: '2026-04-07T06:33:56.339363'
+  full_name: Arjun Mehta
+  email: arjun.mehta@gmail.com
+  occupation: Software Freelancer
+  department:
+  age_range: 25-32
+  location: Bangalore, India
+  tech_proficiency: intermediate
+  project_names:
+    - Platform Upgrade
+    - Q4 Initiative
+    - Process Automation
+  colleague_names:
+    - Taylor Reed
+    - Morgan Patel
+    - Casey Nguyen
+    - Jordan Lee
+    - Sam Wilson
+_persona_interests:
+  hobbies:
+    - Coding (React, Node.js, Python)
+    - Competitive Gaming (FPS and RPGs)
+    - Contemporary Dance
+    - Electronic Music Production
+  professional_topics:
+    - productivity
+    - industry trends
+  entertainment: []
+_work_style:
+  description: Software Freelancer with a practical workflow
+  typical_tools:
+    - Chrome
+    - Notepad
+    - File Explorer
+  collaboration_style: hybrid
+  meeting_frequency: moderate
+_seeds:
+  total_seed_count: 96
+  generated_at: '2026-04-07T06:33:56.339363'
+  gemini_model: gemini-3.1-flash-lite-preview
+  download_count: 20
+  document_count: 30
+  browsing_url_count: 20
+  browsing_search_theme_count: 15
+  filename_pattern_count: 11
+  media_count: 0

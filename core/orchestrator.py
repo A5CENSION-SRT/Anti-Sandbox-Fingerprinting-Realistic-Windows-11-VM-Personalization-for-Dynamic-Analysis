@@ -23,6 +23,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type
 
+import yaml
+
 from core.audit_logger import AuditLogger
 from core.identity_generator import IdentityGenerator
 from core.mount_manager import MountManager
@@ -273,6 +275,64 @@ class Orchestrator:
         # Execution context
         self._context: Dict[str, Any] = {}
 
+    @staticmethod
+    def _normalize_profile_variant(profile_value: Optional[str]) -> Optional[str]:
+        """Normalize profile naming variants to service-compatible values."""
+        if not profile_value:
+            return None
+
+        leaf = profile_value.lower().replace("\\", "/").split("/")[-1]
+        aliases = {
+            "developer": "developer",
+            "developer_user": "developer",
+            "home": "home_user",
+            "home_user": "home_user",
+            "office": "office_user",
+            "office_user": "office_user",
+            "base": "home_user",
+        }
+        return aliases.get(leaf)
+
+    def _resolve_profile_variant(self, profile_name: str, profiles_dir: Path) -> str:
+        """Resolve profile type variant for downstream services.
+
+        Returns one of: ``developer``, ``home_user``, ``office_user``.
+        """
+        explicit = self._normalize_profile_variant(
+            self._config.get("profile_type")
+        )
+        if explicit:
+            return explicit
+
+        from_name = self._normalize_profile_variant(profile_name)
+        if from_name:
+            return from_name
+
+        profile_path = profiles_dir / f"{profile_name}.yaml"
+        if profile_path.is_file():
+            try:
+                payload = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
+                extends_raw = payload.get("extends")
+                if isinstance(extends_raw, str):
+                    from_extends = self._normalize_profile_variant(extends_raw)
+                    if from_extends:
+                        return from_extends
+                elif isinstance(extends_raw, list):
+                    for parent in extends_raw:
+                        if isinstance(parent, str):
+                            from_parent = self._normalize_profile_variant(parent)
+                            if from_parent:
+                                return from_parent
+            except Exception as exc:
+                logger.debug(
+                    "Could not inspect profile extends for %s: %s",
+                    profile_path,
+                    exc,
+                )
+
+        # Fallback heuristic for unknown/custom profile names.
+        return "home_user"
+
     def initialize(self) -> None:
         """Initialize core dependencies and build context.
 
@@ -297,6 +357,7 @@ class Orchestrator:
 
             profile_name = self._config.get("profile_name", "base")
             profile_context = self._profile_engine.load_profile(profile_name)
+            profile_variant = self._resolve_profile_variant(profile_name, profiles_dir)
 
             # Generate identity
             data_dir = Path(self._config.get("data_dir", "data"))
@@ -326,7 +387,8 @@ class Orchestrator:
                 "username": profile_context.username,
                 "organization": profile_context.organization,
                 "locale": profile_context.locale,
-                "profile_type": profile_name,
+                "profile_name": profile_name,
+                "profile_type": profile_variant,
                 "installed_apps": list(profile_context.installed_apps),
                 "browsing": profile_context.browsing.model_dump(),
                 "work_hours": profile_context.work_hours.model_dump(),
