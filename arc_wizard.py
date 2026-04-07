@@ -256,6 +256,57 @@ def dismount_drive(drive_letter: str = "Z") -> bool:
         return False
 
 
+def resolve_default_vhd_image(config: Dict[str, Any]) -> Optional[Path]:
+    """Resolve the disk image used by the manual workflow.
+
+    Preference order:
+    1. A configured `vhdx_path` or `image_path` value, if present and valid.
+    2. The bundled `images/arc_home_user_build.vhd` image.
+    3. A single `.vhd` or `.vhdx` file in `images/`.
+    """
+    configured_path = config.get("vhdx_path") or config.get("image_path")
+    if configured_path:
+        candidate = Path(configured_path)
+        if not candidate.is_absolute():
+            candidate = (_PROJECT_ROOT / candidate).resolve()
+        else:
+            candidate = candidate.resolve()
+
+        if candidate.exists():
+            return candidate
+
+    bundled_image = (_PROJECT_ROOT / "images" / "arc_home_user_build.vhd").resolve()
+    if bundled_image.exists():
+        return bundled_image
+
+    images_dir = _PROJECT_ROOT / "images"
+    if images_dir.exists():
+        disk_images = [
+            path.resolve()
+            for path in sorted(images_dir.iterdir())
+            if path.is_file() and path.suffix.lower() in {".vhd", ".vhdx"}
+        ]
+        if len(disk_images) == 1:
+            return disk_images[0]
+
+    return None
+
+
+def mount_vhd_image(image_path: Path) -> Optional[Path]:
+    """Mount a VHD/VHDX image and return the assigned drive path."""
+    print(f"\n🔄 Mounting {image_path}...")
+    try:
+        from core.vm_manager import VMManager
+
+        vm_manager = VMManager(str(image_path))
+        mount_path = Path(vm_manager.mount_vhdx())
+        print(f"✅ Mounted to: {mount_path}")
+        return mount_path
+    except Exception as exc:
+        print(f"❌ Failed to mount: {exc}")
+        return None
+
+
 # ---------------------------------------------------------------------------
 # AI Generation Workflow
 # ---------------------------------------------------------------------------
@@ -557,25 +608,18 @@ def manual_workflow(config: Dict[str, Any]) -> None:
     else:
         print("ℹ️  Z: drive is not currently mounted")
     
-    # Ask if they want to mount a new drive
-    mount_new = get_yes_no("\nMount a new VHD/VHDX?", default=False)
+    # Ask if they want to mount the bundled image.
+    mount_new = get_yes_no("\nMount the bundled VHD/VHDX image?", default=False)
     mount_path = None
     
     if mount_new:
-        vhdx_path = get_input("\nEnter path to VHD/VHDX file", required=True)
-        if vhdx_path and Path(vhdx_path).exists():
-            print(f"\n🔄 Mounting {vhdx_path}...")
-            # Use VMManager from core
-            try:
-                from core.vm_manager import VMManager
-                vm_manager = VMManager(vhdx_path)
-                mount_path = Path(vm_manager.mount_vhdx())
-                print(f"✅ Mounted to: {mount_path}")
-            except Exception as e:
-                print(f"❌ Failed to mount: {e}")
-                mount_path = None
+        image_path = resolve_default_vhd_image(config)
+        if image_path:
+            mount_path = mount_vhd_image(image_path)
         else:
-            print(f"❌ File not found: {vhdx_path}")
+            print("❌ No VHD/VHDX image was found to mount.")
+            print("   Expected images/arc_home_user_build.vhd or a configured vhdx_path.")
+            print("   Continuing without mounting a drive.")
     
     # Step 2: Profile configuration
     print_section("Step 2: Profile Configuration")

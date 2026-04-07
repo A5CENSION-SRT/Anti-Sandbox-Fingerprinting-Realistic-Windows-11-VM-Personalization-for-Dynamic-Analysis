@@ -1,0 +1,80 @@
+extends: home_user
+username: alex.johnson
+organization: Personal
+locale: en_US
+installed_apps:
+  - lightroom
+  - photos
+  - chrome
+  - notepad
+  - calculator
+browsing:
+  categories:
+    - news
+    - general
+  daily_avg_sites: 25
+work_hours:
+  start: 18
+  end: 23
+  active_days:
+    - 6
+    - 7
+_ai_metadata:
+  generated_at: '2026-04-06T23:49:50.633212'
+  full_name: Alex Johnson
+  email: alex.johnson@gmail.com
+  occupation: Homeowner
+  department:
+  age_range: 28-42
+  location: United States
+  tech_proficiency: intermediate
+  project_names:
+    - Home Renovation
+    - Garden Project
+    - Photo Organization
+    - General Tasks
+    - Admin
+    - Planning
+  colleague_names:
+    - John Smith
+    - Emily Davis
+    - Michael Brown
+    - Jessica Wilson
+    - David Lee
+    - Amanda Garcia
+    - Chris Martinez
+    - Rachel Taylor
+    - Kevin Anderson
+    - Lisa Thomas
+_persona_interests:
+  hobbies:
+    - cooking
+    - gardening
+    - reading
+    - hiking
+    - photography
+  professional_topics:
+    - home improvement
+    - personal finance
+  entertainment:
+    - streaming shows
+    - podcasts
+    - casual games
+_work_style:
+  description: Balanced work style with regular hours
+  typical_tools:
+    - web browser
+    - email
+    - social media
+  collaboration_style: hybrid
+  meeting_frequency: moderate
+_seeds:
+  total_seed_count: 32
+  generated_at: '2026-04-06T23:49:50.633212'
+  gemini_model: gemini-31-flash-lite-preview
+  download_count: 2
+  document_count: 3
+  browsing_url_count: 10
+  browsing_search_theme_count: 10
+  filename_pattern_count: 7
+  media_count: 0

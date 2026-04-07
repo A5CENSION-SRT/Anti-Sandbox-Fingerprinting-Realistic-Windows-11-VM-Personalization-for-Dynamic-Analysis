@@ -12,10 +12,10 @@ installed_apps:
   - discord
 browsing:
   categories:
-    - documentation
-    - stackoverflow
-    - github
     - entertainment
+    - documentation
+    - github
+    - stackoverflow
   daily_avg_sites: 33
 work_hours:
   start: 10
@@ -27,7 +27,7 @@ work_hours:
     - 4
     - 5
 _ai_metadata:
-  generated_at: '2026-04-06T18:11:07.849792'
+  generated_at: '2026-04-06T20:18:26.057875'
   full_name: Jordan Chen
   email: jordan.chen@techstartinc.com
   occupation: Senior Software Engineer
@@ -80,8 +80,11 @@ _work_style:
   meeting_frequency: moderate
 _seeds:
   total_seed_count: 32
-  generated_at: '2026-04-06T18:11:07.849792'
-  gemini_model: gemini-3.1-flash-lite-preview
+  generated_at: '2026-04-06T20:18:26.057875'
+  gemini_model: gemini-31-flash-lite-preview
   download_count: 3
   document_count: 2
+  browsing_url_count: 10
+  browsing_search_theme_count: 10
+  filename_pattern_count: 7
   media_count: 0
