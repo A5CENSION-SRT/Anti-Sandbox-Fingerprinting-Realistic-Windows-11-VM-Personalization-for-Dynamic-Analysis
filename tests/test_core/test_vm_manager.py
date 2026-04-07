@@ -12,7 +12,7 @@ def _make_image(tmp_path: Path) -> Path:
     image = tmp_path / "test.vhdx"
     image.write_bytes(b"dummy")
     return image
-
+    
 
 def test_mount_reuses_already_attached_image(
     tmp_path: Path,
@@ -81,3 +81,45 @@ def test_dismount_skips_when_image_already_detached(
 
     assert run_called["value"] is False
     assert manager.mounted_drive is None
+
+
+def test_mount_recovers_from_stale_attached_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Attached images without a visible drive should trigger one remount attempt."""
+    manager = VMManager(str(_make_image(tmp_path)))
+    commands: list[str] = []
+    discovered = iter([None, "G:\\"])
+
+    monkeypatch.setattr(manager, "_is_image_attached", lambda: True)
+    monkeypatch.setattr(manager, "_discover_windows_drive", lambda: next(discovered))
+
+    def _fake_run(command: str) -> str:
+        commands.append(command)
+        return ""
+
+    monkeypatch.setattr(manager, "_run_powershell", _fake_run)
+
+    drive = manager.mount_vhdx()
+
+    assert drive == "G:\\"
+    assert manager.mounted_drive == "G:\\"
+    assert any("Dismount-DiskImage" in command for command in commands)
+    assert any("Mount-DiskImage" in command for command in commands)
+
+
+def test_mount_reports_raw_partition_style(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RAW attached disks should raise a diagnostic error message."""
+    manager = VMManager(str(_make_image(tmp_path)))
+
+    monkeypatch.setattr(manager, "_is_image_attached", lambda: True)
+    monkeypatch.setattr(manager, "_discover_windows_drive", lambda: None)
+    monkeypatch.setattr(manager, "_get_image_partition_style", lambda: "RAW")
+    monkeypatch.setattr(manager, "_run_powershell", lambda _command: "")
+
+    with pytest.raises(VMManagerError, match="RAW partition style"):
+        manager.mount_vhdx()

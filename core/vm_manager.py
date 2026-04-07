@@ -61,31 +61,129 @@ class VMManager:
         """
         return self._run_powershell(script).strip() == "true"
 
-    def _discover_windows_drive(self) -> Optional[str]:
-        """Find the mounted drive letter containing the Windows folder."""
+    def _list_image_drive_candidates(self) -> list[str]:
+        """Return drive roots currently mapped to the attached image."""
         script = f"""
         $image = Get-DiskImage -ImagePath '{self._ps_image_path}' -ErrorAction SilentlyContinue
         if (-not $image -or -not $image.Attached) {{
             return
         }}
 
-        $volumes = $image |
-            Get-Disk -ErrorAction SilentlyContinue |
-            Get-Partition -ErrorAction SilentlyContinue |
-            Get-Volume -ErrorAction SilentlyContinue
+        $disk = $null
+        if ($image.DevicePath) {{
+            $disk = Get-Disk -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $image.DevicePath }}
+        }}
+        if (-not $disk -and $null -ne $image.Number) {{
+            $disk = Get-Disk -Number $image.Number -ErrorAction SilentlyContinue
+        }}
+        if (-not $disk) {{
+            return
+        }}
 
-        foreach ($vol in $volumes) {{
-            if ($vol.DriveLetter) {{
-                $candidate = $vol.DriveLetter + ':\\'
-                if (Test-Path ($candidate + 'Windows')) {{
-                    Write-Output $candidate
-                    return
-                }}
+        $partitions = $disk | Get-Partition -ErrorAction SilentlyContinue
+        foreach ($part in $partitions) {{
+            if ($part.DriveLetter) {{
+                Write-Output ($part.DriveLetter + ':\\')
             }}
         }}
         """
-        drive = self._run_powershell(script)
-        return drive if drive else None
+        output = self._run_powershell(script)
+        candidates = [line.strip() for line in output.splitlines() if line.strip()]
+        return list(dict.fromkeys(candidates))
+
+    def _try_assign_drive_letter(self) -> bool:
+        """Try assigning a drive letter to the largest partition without one."""
+        script = f"""
+        $image = Get-DiskImage -ImagePath '{self._ps_image_path}' -ErrorAction SilentlyContinue
+        if (-not $image -or -not $image.Attached) {{
+            Write-Output 'false'
+            return
+        }}
+
+        $disk = $null
+        if ($image.DevicePath) {{
+            $disk = Get-Disk -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $image.DevicePath }}
+        }}
+        if (-not $disk -and $null -ne $image.Number) {{
+            $disk = Get-Disk -Number $image.Number -ErrorAction SilentlyContinue
+        }}
+        if (-not $disk) {{
+            Write-Output 'false'
+            return
+        }}
+
+        $partition = $disk |
+            Get-Partition -ErrorAction SilentlyContinue |
+            Where-Object {{ -not $_.DriveLetter -and $_.Size -gt 0 }} |
+            Sort-Object Size -Descending |
+            Select-Object -First 1
+
+        if (-not $partition) {{
+            Write-Output 'false'
+            return
+        }}
+
+        try {{
+            $partition | Add-PartitionAccessPath -AssignDriveLetter -ErrorAction Stop | Out-Null
+            Write-Output 'true'
+        }} catch {{
+            Write-Output 'false'
+        }}
+        """
+        return self._run_powershell(script).strip() == "true"
+
+    def _get_image_partition_style(self) -> Optional[str]:
+        """Return partition style for the attached image disk (RAW, MBR, GPT)."""
+        script = f"""
+        $image = Get-DiskImage -ImagePath '{self._ps_image_path}' -ErrorAction SilentlyContinue
+        if (-not $image -or -not $image.Attached) {{
+            return
+        }}
+
+        $disk = $null
+        if ($image.DevicePath) {{
+            $disk = Get-Disk -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -eq $image.DevicePath }} | Select-Object -First 1
+        }}
+        if (-not $disk -and $null -ne $image.Number) {{
+            $disk = Get-Disk -Number $image.Number -ErrorAction SilentlyContinue
+        }}
+        if (-not $disk) {{
+            return
+        }}
+
+        Write-Output ([string]$disk.PartitionStyle)
+        """
+        style = self._run_powershell(script).strip()
+        return style if style else None
+
+    def _discover_windows_drive(self) -> Optional[str]:
+        """Find the mounted drive letter containing the Windows folder."""
+        candidates = self._list_image_drive_candidates()
+
+        for candidate in candidates:
+            if Path(candidate, "Windows").exists():
+                return candidate
+
+        if candidates:
+            logger.info(
+                "No Windows folder found on mounted image; using first available partition: %s",
+                candidates[0],
+            )
+            return candidates[0]
+
+        if self._try_assign_drive_letter():
+            candidates = self._list_image_drive_candidates()
+            for candidate in candidates:
+                if Path(candidate, "Windows").exists():
+                    return candidate
+            if candidates:
+                logger.info(
+                    "Assigned drive letter to mounted image; using partition: %s",
+                    candidates[0],
+                )
+                return candidates[0]
+
+        return None
 
     def stop_vm(self, vm_name: str, force: bool = False) -> None:
         """Not supported on Windows Home (Hyper-V API required)."""
@@ -124,10 +222,34 @@ class VMManager:
 
         time.sleep(2)
         drive = self._discover_windows_drive()
+
+        if not drive and already_attached and not mounted_by_this_call:
+            logger.warning(
+                "Image is attached but no drive was discovered; attempting remount to clear stale state."
+            )
+            try:
+                self._run_powershell(
+                    f"Dismount-DiskImage -ImagePath '{self._ps_image_path}' -ErrorAction SilentlyContinue"
+                )
+                self._run_powershell(
+                    f"Mount-DiskImage -ImagePath '{self._ps_image_path}' -NoDriveLetter:$false"
+                )
+                time.sleep(2)
+                drive = self._discover_windows_drive()
+            except VMManagerError:
+                logger.warning("Remount attempt failed while recovering stale attachment state.")
         
         if not drive:
             if mounted_by_this_call:
                 self.dismount_vhdx()
+
+            partition_style = self._get_image_partition_style()
+            if partition_style and partition_style.upper() == "RAW":
+                raise VMManagerError(
+                    "Disk image is attached but uses RAW partition style (no partition/drive letter). "
+                    "Initialize and format the VHD/VHDX once, then retry."
+                )
+
             raise VMManagerError("Failed to locate Windows partition on mounted VHDX.")
             
         logger.info("Discovered Windows partition at %s", drive)
