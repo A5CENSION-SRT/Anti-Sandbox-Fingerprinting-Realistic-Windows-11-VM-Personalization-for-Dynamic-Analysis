@@ -73,6 +73,12 @@ _SOFTWARE_HIVE: str = "Windows/System32/config/SOFTWARE"
 _SYSINFO_KEY: str = r"ControlSet001\Control\SystemInformation"
 _DISK_ENUM_KEY: str = r"ControlSet001\Services\disk\Enum"
 _BIOS_DESCRIPTION_KEY: str = r"DESCRIPTION\System\BIOS"
+_HARDWARE_DESCRIPTION_SYSTEM: str = r"DESCRIPTION\System"
+_SCSI_IDENTIFIER_KEY: str = (
+    r"DEVICEMAP\Scsi\Scsi Port 0\Scsi Bus 0\Target Id 0\Logical Unit Id 0"
+)
+
+_HARDWARE_HIVE: str = "Windows/System32/config/HARDWARE"
 
 # Hardware data file
 _HW_DATA_FILE: str = "hardware_models.json"
@@ -120,7 +126,7 @@ class HardwareNormalizer(BaseService):
         """Return the unique service name."""
         return "HardwareNormalizer"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -129,17 +135,7 @@ class HardwareNormalizer(BaseService):
         Raises:
             HardwareNormalizerError: On missing context keys or write failure.
         """
-        from core.identity_generator import IdentityBundle
-
-        bundle = context.get("identity_bundle")
-        if bundle is None:
-            raise HardwareNormalizerError(
-                "Missing required 'identity_bundle' in context"
-            )
-        if not isinstance(bundle, IdentityBundle):
-            raise HardwareNormalizerError(
-                f"Expected IdentityBundle, got {type(bundle).__name__}"
-            )
+        bundle = ctx.identity_bundle
         self.normalize(bundle)
 
     # -- public API ---------------------------------------------------------
@@ -198,6 +194,9 @@ class HardwareNormalizer(BaseService):
 
         # -- Disk enumeration (SYSTEM hive) ---------------------------------
         ops.extend(self._build_disk_ops(hw))
+
+        # -- HARDWARE hive (Phase 7: SystemBiosVersion, VideoBiosVersion, SCSI) --
+        ops.extend(self._build_hardware_hive_ops(hw, bios_date_str))
 
         return ops
 
@@ -309,6 +308,52 @@ class HardwareNormalizer(BaseService):
                 value_name="NextInstance",
                 value_data=1,
                 value_type=RegistryValueType.REG_DWORD,
+            ),
+        ]
+
+    def _build_hardware_hive_ops(
+        self, hw: Any, bios_date_str: str
+    ) -> List[HiveOperation]:
+        """Build HARDWARE hive operations (Phase 7).
+
+        Patches DESCRIPTION\System SystemBiosVersion / VideoBiosVersion and
+        DEVICEMAP\Scsi Identifier so these no longer reveal QEMU.
+
+        These are skipped gracefully if the HARDWARE hive is absent in the
+        offline image (it is normally volatile — rebuilt at boot time).
+        """
+        bios_version_strings = [
+            f"{hw.bios_vendor.upper()[:6].ljust(6)} - {hw.bios_version}",
+            hw.bios_version,
+        ]
+        video_bios_strings = [
+            f"Hardware Version Not Available",
+        ]
+        vendor, _, model_rest = hw.disk_model.partition(" ")
+        model_clean = model_rest.replace(" ", "  ")[:16].upper()
+        scsi_identifier = f"{vendor.upper():<8}  {model_clean}"
+
+        return [
+            HiveOperation(
+                hive_path=_HARDWARE_HIVE,
+                key_path=_HARDWARE_DESCRIPTION_SYSTEM,
+                value_name="SystemBiosVersion",
+                value_data=bios_version_strings,
+                value_type=RegistryValueType.REG_MULTI_SZ,
+            ),
+            HiveOperation(
+                hive_path=_HARDWARE_HIVE,
+                key_path=_HARDWARE_DESCRIPTION_SYSTEM,
+                value_name="VideoBiosVersion",
+                value_data=video_bios_strings,
+                value_type=RegistryValueType.REG_MULTI_SZ,
+            ),
+            HiveOperation(
+                hive_path=_HARDWARE_HIVE,
+                key_path=_SCSI_IDENTIFIER_KEY,
+                value_name="Identifier",
+                value_data=scsi_identifier,
+                value_type=RegistryValueType.REG_SZ,
             ),
         ]
 

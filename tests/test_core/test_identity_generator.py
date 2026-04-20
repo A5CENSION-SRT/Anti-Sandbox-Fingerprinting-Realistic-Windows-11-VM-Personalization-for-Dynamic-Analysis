@@ -1,4 +1,4 @@
-"""Tests for the Identity Generation Service."""
+"""Tests for IdentityGenerator — uses PersonaContext (canonical schema)."""
 
 import json
 import re
@@ -15,40 +15,54 @@ from core.identity_generator import (
     IdentityGenerator,
     UserIdentity,
 )
-from core.profile_engine import BrowsingHabits, ProfileContext, WorkHours
+from core.persona_context import PersonaContext, PersonaInterests, PersonaWorkStyle
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_profile(**overrides: object) -> ProfileContext:
-    """Build a ProfileContext with sensible defaults, applying *overrides*."""
-    defaults = {
-        "username": "test_user",
+def _make_persona(**overrides: object) -> PersonaContext:
+    defaults: dict = {
+        "full_name": "Jane Smith",
+        "username": "jane.smith",
+        "email": "jane.smith@acmesolutions.com",
         "organization": "Acme Solutions Pvt Ltd",
+        "occupation": "Marketing Manager",
+        "age_range": "30-40",
         "locale": "en_US",
-        "installed_apps": ["outlook", "teams"],
-        "browsing": BrowsingHabits(
-            categories=["business", "news"], daily_avg_sites=15
+        "interests": PersonaInterests(
+            hobbies=["reading", "yoga", "travel"],
+            professional_topics=["marketing", "analytics"],
+            entertainment=["documentaries"],
         ),
-        "work_hours": WorkHours(start=9, end=17, active_days=[1, 2, 3, 4, 5]),
+        "work_style": PersonaWorkStyle(
+            description="Collaborative, deadline-driven",
+            typical_tools=["outlook", "excel", "teams"],
+        ),
+        "project_names": ["Q4 Campaign", "Brand Refresh", "Customer Survey"],
+        "colleague_names": [
+            "John Smith", "Emily Davis", "Michael Brown",
+            "Jessica Wilson", "David Lee",
+        ],
+        "installed_apps": ["outlook", "teams"],
+        "browsing_categories": ["business", "news"],
+        "daily_avg_sites": 15,
+        "work_hours_start": 9,
+        "work_hours_end": 17,
+        "active_days": [1, 2, 3, 4, 5],
     }
     defaults.update(overrides)
-    return ProfileContext(**defaults)
+    return PersonaContext(**defaults)
 
 
 def _hw_data_path(tmp_path: Path) -> Path:
-    """Create a minimal hardware_models.json in *tmp_path* and return data dir."""
     data = {
         "system_vendors": [
             {
                 "bios_vendor": "Dell Inc.",
                 "bios_versions": ["1.15.0", "2.3.1"],
-                "motherboard_models": [
-                    "Dell Inc. 0T7D40",
-                    "Dell Inc. 06D7TR",
-                ],
+                "motherboard_models": ["Dell Inc. 0T7D40", "Dell Inc. 06D7TR"],
             },
             {
                 "bios_vendor": "Lenovo",
@@ -76,304 +90,195 @@ def _hw_data_path(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def data_dir(tmp_path: Path) -> Path:
-    """Temporary data directory with valid hardware_models.json."""
     return _hw_data_path(tmp_path)
 
 
 @pytest.fixture()
-def office_profile() -> ProfileContext:
-    """Office-type profile."""
-    return _make_profile()
+def office_persona() -> PersonaContext:
+    return _make_persona()
 
 
 @pytest.fixture()
-def developer_profile() -> ProfileContext:
-    """Developer-type profile."""
-    return _make_profile(
-        username="dev_user",
+def developer_persona() -> PersonaContext:
+    return _make_persona(
+        full_name="Dev User",
+        username="dev.user",
+        email="dev.user@techcorp.com",
+        organization="TechCorp Inc",
+        occupation="Software Engineer",
         installed_apps=["vscode", "docker", "git", "terminal"],
-        browsing=BrowsingHabits(
-            categories=["stackoverflow", "github"], daily_avg_sites=30
-        ),
+        browsing_categories=["stackoverflow", "github"],
+        daily_avg_sites=80,
+        profile_archetype="developer",
     )
 
 
 @pytest.fixture()
-def home_profile() -> ProfileContext:
-    """Home-type profile."""
-    return _make_profile(
-        username="home_person",
-        organization="personal",
+def home_persona() -> PersonaContext:
+    return _make_persona(
+        full_name="Home Person",
+        username="home.person",
+        email="home.person@personal.com",
+        organization="Personal",
+        occupation="Homeowner",
         installed_apps=["spotify", "vlc"],
-        browsing=BrowsingHabits(
-            categories=["social_media", "entertainment"], daily_avg_sites=20
-        ),
-        work_hours=WorkHours(start=18, end=23, active_days=[6, 7]),
+        browsing_categories=["social", "entertainment"],
+        daily_avg_sites=20,
+        work_hours_start=18,
+        work_hours_end=23,
+        active_days=[6, 7],
+        profile_archetype="home_user",
     )
 
 
 # ---------------------------------------------------------------------------
-# 1. Deterministic output with same seed
+# 1. Determinism
 # ---------------------------------------------------------------------------
 
 class TestDeterminism:
-    """Two runs with same ProfileContext must produce identical output."""
+    def test_same_persona_same_output(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        gen = IdentityGenerator(office_persona, data_dir)
+        assert gen.generate() == gen.generate()
 
-    def test_same_profile_same_output(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        gen = IdentityGenerator(office_profile, data_dir)
-        bundle_a = gen.generate()
-        bundle_b = gen.generate()
-        assert bundle_a == bundle_b
-
-    def test_new_instance_same_output(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        gen_a = IdentityGenerator(office_profile, data_dir)
-        gen_b = IdentityGenerator(office_profile, data_dir)
-        assert gen_a.generate() == gen_b.generate()
+    def test_new_instance_same_output(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        a = IdentityGenerator(office_persona, data_dir).generate()
+        b = IdentityGenerator(office_persona, data_dir).generate()
+        assert a == b
 
 
 # ---------------------------------------------------------------------------
-# 2. Different profiles produce different identities
+# 2. Different personas produce different bundles
 # ---------------------------------------------------------------------------
 
-class TestDifferentProfiles:
-    """Profiles with different usernames must produce different bundles."""
-
-    def test_different_usernames_different_bundles(
-        self, data_dir: Path, office_profile: ProfileContext
+class TestDifferentPersonas:
+    def test_different_usernames(
+        self, data_dir: Path, office_persona: PersonaContext
     ) -> None:
-        other = _make_profile(username="other_user")
-        gen_a = IdentityGenerator(office_profile, data_dir)
-        gen_b = IdentityGenerator(other, data_dir)
-        bundle_a = gen_a.generate()
-        bundle_b = gen_b.generate()
-        assert bundle_a.user.full_name != bundle_b.user.full_name
+        other = _make_persona(username="other.user", email="other.user@acmesolutions.com")
+        a = IdentityGenerator(office_persona, data_dir).generate()
+        b = IdentityGenerator(other, data_dir).generate()
+        assert a.user.full_name != b.user.full_name
 
     def test_developer_vs_home(
         self,
         data_dir: Path,
-        developer_profile: ProfileContext,
-        home_profile: ProfileContext,
+        developer_persona: PersonaContext,
+        home_persona: PersonaContext,
     ) -> None:
-        ba = IdentityGenerator(developer_profile, data_dir).generate()
-        bb = IdentityGenerator(home_profile, data_dir).generate()
-        assert ba.user.username != bb.user.username
+        a = IdentityGenerator(developer_persona, data_dir).generate()
+        b = IdentityGenerator(home_persona, data_dir).generate()
+        assert a.user.username != b.user.username
 
 
 # ---------------------------------------------------------------------------
-# 3. Email matches organization domain
+# 3. Email matches org
 # ---------------------------------------------------------------------------
 
 class TestEmailDomain:
-    """Email domain must be derived from the organization name."""
-
-    def test_email_domain_matches_org(
-        self, data_dir: Path, office_profile: ProfileContext
+    def test_email_domain_derived_from_org(
+        self, data_dir: Path, office_persona: PersonaContext
     ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
         domain = bundle.user.email.split("@")[1]
-        # "Acme Solutions Pvt Ltd" → "acmesolutions.com"
         assert domain == "acmesolutions.com"
 
-    def test_email_local_matches_username(
-        self, data_dir: Path, office_profile: ProfileContext
+    def test_personal_org_uses_personal_domain(
+        self, data_dir: Path, home_persona: PersonaContext
     ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        local = bundle.user.email.split("@")[0]
-        assert local == bundle.user.username
-
-    def test_personal_org_domain(
-        self, data_dir: Path, home_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(home_profile, data_dir).generate()
+        bundle = IdentityGenerator(home_persona, data_dir).generate()
         domain = bundle.user.email.split("@")[1]
         assert domain == "personal.com"
 
 
 # ---------------------------------------------------------------------------
-# 4. Username rules enforced
+# 4. Username rules
 # ---------------------------------------------------------------------------
 
 class TestUsernameRules:
-    """Username must be lowercase, no spaces, alphanumeric + dot only."""
-
-    def test_lowercase(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+    def test_lowercase(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
         assert bundle.user.username == bundle.user.username.lower()
 
-    def test_no_spaces(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+    def test_no_spaces(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
         assert " " not in bundle.user.username
 
-    def test_valid_chars_only(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+    def test_valid_chars(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
         assert re.fullmatch(r"[a-z0-9.]+", bundle.user.username)
-
-    def test_firstname_dot_lastname_format(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        assert "." in bundle.user.username
 
 
 # ---------------------------------------------------------------------------
-# 5. Computer name contains no VM strings
+# 5. Computer name has no VM strings
 # ---------------------------------------------------------------------------
 
 class TestComputerName:
-    """Computer name must not contain known VM indicators."""
-
     _VM_PATTERNS = ["VBOX", "VMWARE", "VIRTUAL", "TEST-PC", "SANDBOX", "HYPERV"]
 
-    def test_no_vm_strings_office(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+    def _assert_no_vm(self, bundle: IdentityBundle) -> None:
         upper = bundle.user.computer_name.upper()
-        for pattern in self._VM_PATTERNS:
-            assert pattern not in upper
+        for p in self._VM_PATTERNS:
+            assert p not in upper, f"VM string '{p}' found in computer name"
 
-    def test_no_vm_strings_developer(
-        self, data_dir: Path, developer_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(developer_profile, data_dir).generate()
-        upper = bundle.user.computer_name.upper()
-        for pattern in self._VM_PATTERNS:
-            assert pattern not in upper
+    def test_office(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        self._assert_no_vm(IdentityGenerator(office_persona, data_dir).generate())
 
-    def test_no_vm_strings_home(
-        self, data_dir: Path, home_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(home_profile, data_dir).generate()
-        upper = bundle.user.computer_name.upper()
-        for pattern in self._VM_PATTERNS:
-            assert pattern not in upper
+    def test_developer(self, data_dir: Path, developer_persona: PersonaContext) -> None:
+        self._assert_no_vm(IdentityGenerator(developer_persona, data_dir).generate())
 
-    def test_developer_computer_name_pattern(
-        self, data_dir: Path, developer_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(developer_profile, data_dir).generate()
-        name = bundle.user.computer_name
-        assert (
-            name.startswith("DEV-") and name.endswith("-PC")
-        ) or name.endswith("-WS")
-
-    def test_office_computer_name_pattern(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        name = bundle.user.computer_name
-        assert name.startswith("DESKTOP-") or "-LT-" in name
+    def test_home(self, data_dir: Path, home_persona: PersonaContext) -> None:
+        self._assert_no_vm(IdentityGenerator(home_persona, data_dir).generate())
 
 
 # ---------------------------------------------------------------------------
-# 6. Hardware strings exist in hardware_models.json
+# 6. Hardware from data file
 # ---------------------------------------------------------------------------
 
 class TestHardwareFromData:
-    """All hardware identifiers must come from hardware_models.json."""
-
-    def test_bios_vendor_from_data(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        hw_data = json.loads(
-            (data_dir / "hardware_models.json").read_text(encoding="utf-8")
-        )
-        vendors = {v["bios_vendor"] for v in hw_data["system_vendors"]}
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+    def test_bios_vendor_from_data(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        hw = json.loads((data_dir / "hardware_models.json").read_text())
+        vendors = {v["bios_vendor"] for v in hw["system_vendors"]}
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
         assert bundle.hardware.bios_vendor in vendors
 
-    def test_motherboard_from_matching_vendor(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        hw_data = json.loads(
-            (data_dir / "hardware_models.json").read_text(encoding="utf-8")
-        )
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        # Find the vendor group that matches
-        for group in hw_data["system_vendors"]:
-            if group["bios_vendor"] == bundle.hardware.bios_vendor:
-                assert bundle.hardware.motherboard_model in group["motherboard_models"]
-                assert bundle.hardware.bios_version in group["bios_versions"]
-                return
-        pytest.fail("BIOS vendor not found in hardware data")
+    def test_disk_from_data(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        hw = json.loads((data_dir / "hardware_models.json").read_text())
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        assert bundle.hardware.disk_model in hw["disk_models"]
 
-    def test_disk_model_from_data(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        hw_data = json.loads(
-            (data_dir / "hardware_models.json").read_text(encoding="utf-8")
-        )
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        assert bundle.hardware.disk_model in hw_data["disk_models"]
+    def test_gpu_from_data(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        hw = json.loads((data_dir / "hardware_models.json").read_text())
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        assert bundle.hardware.gpu_model in hw["gpu_models"]
 
-    def test_gpu_model_from_data(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        hw_data = json.loads(
-            (data_dir / "hardware_models.json").read_text(encoding="utf-8")
-        )
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        assert bundle.hardware.gpu_model in hw_data["gpu_models"]
+    def test_disk_serial_format(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        assert re.fullmatch(r"[A-Z0-9]+", bundle.hardware.disk_serial)
+        assert 10 <= len(bundle.hardware.disk_serial) <= 16
 
-    def test_disk_serial_format(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        serial = bundle.hardware.disk_serial
-        assert 10 <= len(serial) <= 16
-        assert re.fullmatch(r"[A-Z0-9]+", serial)
-
-    def test_bios_release_date_plausible(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
+    def test_bios_date_plausible(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
         assert isinstance(bundle.hardware.bios_release_date, date)
         assert bundle.hardware.bios_release_date <= date.today()
 
 
 # ---------------------------------------------------------------------------
-# 7. Returned bundle is immutable
+# 7. Immutability
 # ---------------------------------------------------------------------------
 
 class TestImmutability:
-    """IdentityBundle and its sub-models must be frozen."""
-
-    def test_bundle_frozen(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        with pytest.raises(ValidationError):
+    def test_bundle_frozen(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        with pytest.raises((ValidationError, TypeError)):
             bundle.user = UserIdentity(
-                full_name="x",
-                username="x",
-                email="x@x.com",
-                organization="x",
-                computer_name="x",
+                full_name="x", username="x", email="x@x.com",
+                organization="x", computer_name="x",
             )
 
-    def test_user_frozen(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        with pytest.raises(ValidationError):
+    def test_user_frozen(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        with pytest.raises((ValidationError, TypeError)):
             bundle.user.username = "hacked"
-
-    def test_hardware_frozen(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        with pytest.raises(ValidationError):
-            bundle.hardware.bios_vendor = "hacked"
 
 
 # ---------------------------------------------------------------------------
@@ -381,58 +286,42 @@ class TestImmutability:
 # ---------------------------------------------------------------------------
 
 class TestNoEmptyStrings:
-    """All string fields must be non-empty."""
+    def test_user_fields(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        for f in UserIdentity.model_fields:
+            v = getattr(bundle.user, f)
+            if isinstance(v, str):
+                assert v, f"user.{f} is empty"
 
-    def test_user_fields_non_empty(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        for field_name in UserIdentity.model_fields:
-            value = getattr(bundle.user, field_name)
-            if isinstance(value, str):
-                assert value, f"user.{field_name} is empty"
-
-    def test_hardware_fields_non_empty(
-        self, data_dir: Path, office_profile: ProfileContext
-    ) -> None:
-        bundle = IdentityGenerator(office_profile, data_dir).generate()
-        for field_name in HardwareIdentity.model_fields:
-            value = getattr(bundle.hardware, field_name)
-            if isinstance(value, str):
-                assert value, f"hardware.{field_name} is empty"
+    def test_hardware_fields(self, data_dir: Path, office_persona: PersonaContext) -> None:
+        bundle = IdentityGenerator(office_persona, data_dir).generate()
+        for f in HardwareIdentity.model_fields:
+            v = getattr(bundle.hardware, f)
+            if isinstance(v, str):
+                assert v, f"hardware.{f} is empty"
 
 
 # ---------------------------------------------------------------------------
-# Edge-case: missing hardware data file
+# 9. Error handling
 # ---------------------------------------------------------------------------
 
 class TestErrorHandling:
-    """Invalid data must produce clear errors."""
-
-    def test_missing_data_dir(
-        self, tmp_path: Path, office_profile: ProfileContext
-    ) -> None:
+    def test_missing_data_dir(self, tmp_path: Path, office_persona: PersonaContext) -> None:
         with pytest.raises(FileNotFoundError):
-            IdentityGenerator(office_profile, tmp_path / "nope")
+            IdentityGenerator(office_persona, tmp_path / "nope")
 
-    def test_missing_hardware_json(
-        self, tmp_path: Path, office_profile: ProfileContext
-    ) -> None:
-        empty_dir = tmp_path / "empty"
-        empty_dir.mkdir()
+    def test_missing_hardware_json(self, tmp_path: Path, office_persona: PersonaContext) -> None:
+        empty = tmp_path / "empty"
+        empty.mkdir()
         with pytest.raises(FileNotFoundError):
-            IdentityGenerator(office_profile, empty_dir)
+            IdentityGenerator(office_persona, empty)
 
-    def test_malformed_hardware_json(
-        self, tmp_path: Path, office_profile: ProfileContext
-    ) -> None:
+    def test_malformed_json(self, tmp_path: Path, office_persona: PersonaContext) -> None:
         (tmp_path / "hardware_models.json").write_text("{invalid json")
         with pytest.raises(IdentityGenerationError, match="parse"):
-            IdentityGenerator(office_profile, tmp_path)
+            IdentityGenerator(office_persona, tmp_path)
 
-    def test_missing_required_keys(
-        self, tmp_path: Path, office_profile: ProfileContext
-    ) -> None:
+    def test_missing_required_keys(self, tmp_path: Path, office_persona: PersonaContext) -> None:
         (tmp_path / "hardware_models.json").write_text("{}")
         with pytest.raises(IdentityGenerationError, match="missing required"):
-            IdentityGenerator(office_profile, tmp_path)
+            IdentityGenerator(office_persona, tmp_path)

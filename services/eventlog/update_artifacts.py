@@ -153,7 +153,7 @@ class UpdateArtifacts(BaseService):
         """Return the unique service name."""
         return "UpdateArtifacts"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -164,15 +164,10 @@ class UpdateArtifacts(BaseService):
         Raises:
             UpdateArtifactsError: On missing context keys or write failure.
         """
-        for key in ("profile_type", "computer_name", "install_date"):
-            if not context.get(key):
-                raise UpdateArtifactsError(
-                    f"Missing required '{key}' in context"
-                )
         self.write_update_artifacts(
-            profile_type=context["profile_type"],
-            computer_name=context["computer_name"],
-            install_date=context["install_date"],
+            profile_type=ctx.persona.profile_archetype,
+            computer_name=ctx.identity_bundle.user.computer_name,
+            install_date=ctx.install_time.date(),
         )
 
     # -- public API ---------------------------------------------------------

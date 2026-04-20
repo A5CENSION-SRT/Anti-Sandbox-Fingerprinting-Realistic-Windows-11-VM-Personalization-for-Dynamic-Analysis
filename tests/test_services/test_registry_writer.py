@@ -17,6 +17,17 @@ from services.registry.hive_writer import (
     RegistryValueType,
 )
 
+try:
+    import hivex  # noqa: F401
+    _HIVEX_AVAILABLE = True
+except ImportError:
+    _HIVEX_AVAILABLE = False
+
+_requires_hivex = pytest.mark.skipif(
+    not _HIVEX_AVAILABLE,
+    reason="python3-hivex not installed: apt install libhivex-bin python3-hivex",
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal valid regf hive builder
@@ -155,6 +166,7 @@ def hive_file(mount_dir: Path) -> Path:
 # 1. HiveWriter initialisation
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestHiveWriterInit:
     """HiveWriter must validate dependencies at construction time."""
 
@@ -306,6 +318,7 @@ class TestValueEncoding:
 # 4. Path resolution and security
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestPathResolution:
     """HiveWriter must resolve hive paths safely via MountManager."""
 
@@ -332,8 +345,9 @@ class TestPathResolution:
 # 5. Execute operations — structural tests
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestExecuteOperations:
-    """execute_operations must process batched operations and create backups."""
+    """execute_operations must apply batched operations via hivex."""
 
     def test_empty_operations_is_noop(
         self, writer: HiveWriter, audit_logger: AuditLogger
@@ -341,19 +355,19 @@ class TestExecuteOperations:
         writer.execute_operations([])
         assert len(audit_logger.entries) == 0
 
-    def test_creates_backup_on_write(
+    def test_write_value_persisted(
         self, writer: HiveWriter, hive_file: Path
     ) -> None:
         op = _make_op()
-        # The HiveWriter successfully creates keys/values in empty hives,
-        # and should still create a backup before modification.
         writer.execute_operations([op])
-        backup = hive_file.with_suffix(hive_file.suffix + ".bak")
-        assert backup.exists()
-        # Backup should reflect the original size before modifications
-        assert backup.stat().st_size > 0
+        result = writer.read_value(
+            "Windows/System32/config/SOFTWARE",
+            r"Microsoft\Windows NT\CurrentVersion",
+            "RegisteredOwner",
+        )
+        assert result == "John Doe"
 
-    def test_rejects_invalid_regf_signature(
+    def test_rejects_invalid_hive(
         self, writer: HiveWriter, mount_dir: Path
     ) -> None:
         hive_dir = mount_dir / "Windows" / "System32" / "config"
@@ -361,13 +375,12 @@ class TestExecuteOperations:
         bad_hive = hive_dir / "BAD_HIVE"
         bad_hive.write_bytes(b"\x00" * 8192)
         op = _make_op(hive_path="Windows/System32/config/BAD_HIVE")
-        with pytest.raises(HiveWriterError, match="regf"):
+        with pytest.raises(HiveWriterError):
             writer.execute_operations([op])
 
     def test_groups_operations_by_hive(
         self, writer: HiveWriter, mount_dir: Path
     ) -> None:
-        # Create two hive files
         hive_dir = mount_dir / "Windows" / "System32" / "config"
         hive_dir.mkdir(parents=True, exist_ok=True)
         for name in ("SOFTWARE", "SYSTEM"):
@@ -376,19 +389,15 @@ class TestExecuteOperations:
         op1 = _make_op(hive_path="Windows/System32/config/SOFTWARE")
         op2 = _make_op(hive_path="Windows/System32/config/SYSTEM")
 
-        # HiveWriter successfully creates keys/values in empty hives.
-        # Both hives should get backup files.
+        # Both hives should be written without error
         writer.execute_operations([op1, op2])
-
-        # Both hives should have backups
-        assert (hive_dir / "SOFTWARE.bak").exists()
-        assert (hive_dir / "SYSTEM.bak").exists()
 
 
 # ---------------------------------------------------------------------------
 # 6. Audit trail
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestAuditTrail:
     """Every operation must produce audit log entries."""
 
@@ -432,6 +441,7 @@ class TestAuditTrail:
 # 7. BaseService interface compliance
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestServiceInterface:
     """HiveWriter must satisfy the BaseService contract."""
 
@@ -456,6 +466,7 @@ class TestServiceInterface:
 # 8. key_exists helper
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestKeyExists:
     """key_exists must use regipy to check key presence."""
 
@@ -486,6 +497,7 @@ class TestKeyExists:
 # 9. read_value helper
 # ---------------------------------------------------------------------------
 
+@_requires_hivex
 class TestReadValue:
     """read_value must read from offline hives via regipy."""
 

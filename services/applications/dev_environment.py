@@ -110,7 +110,7 @@ class DevEnvironment(BaseService):
     def service_name(self) -> str:
         return "DevEnvironment"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create developer artifacts if dev tools are installed.
 
         Args:
@@ -125,11 +125,11 @@ class DevEnvironment(BaseService):
         Raises:
             DevEnvironmentError: If file creation fails.
         """
-        username = context.get("username", "default_user")
-        profile = context.get("profile_type", "home_user")
-        installed = set(context.get("installed_apps", []))
-        seed = context.get("computer_name", username)
-        org = context.get("organization", "personal")
+        username = ctx.identity_bundle.user.username
+        profile = ctx.persona.profile_archetype
+        installed = set(ctx.persona.installed_apps)
+        seed = ctx.identity_bundle.user.computer_name
+        org = ctx.identity_bundle.user.organization
 
         # Only proceed if at least one dev tool is installed
         if not _DEV_APPS.intersection(installed):

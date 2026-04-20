@@ -194,7 +194,7 @@ class NetworkProfiles(BaseService):
         """Return the unique service name."""
         return "NetworkProfiles"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -203,11 +203,7 @@ class NetworkProfiles(BaseService):
         Raises:
             NetworkProfilesError: If profile_type is missing or invalid.
         """
-        profile_type = context.get("profile_type")
-        if profile_type is None:
-            raise NetworkProfilesError(
-                "Missing required 'profile_type' in context"
-            )
+        profile_type = ctx.persona.profile_archetype
         self.write_network_profiles(profile_type)
 
     # -- public API ---------------------------------------------------------

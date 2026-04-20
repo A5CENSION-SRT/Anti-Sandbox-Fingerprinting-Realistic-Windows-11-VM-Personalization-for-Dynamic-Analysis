@@ -139,7 +139,7 @@ class UserDirectoryService(BaseService):
     def service_name(self) -> str:
         return "UserDirectoryService"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create the user directory structure.
 
         Args:
@@ -151,8 +151,9 @@ class UserDirectoryService(BaseService):
         Raises:
             UserDirectoryError: If directory creation fails.
         """
-        username = context.get("username", "default_user")
-        profile_type = context.get("profile_type", "home_user")
+        from core.service_context import ServiceContext as _SC  # noqa: F401
+        username = ctx.identity_bundle.user.username
+        profile_type = ctx.persona.profile_archetype
 
         user_root = Path("Users") / username
         created_count = 0

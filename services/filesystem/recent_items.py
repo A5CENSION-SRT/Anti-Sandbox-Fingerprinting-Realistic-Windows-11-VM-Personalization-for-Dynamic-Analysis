@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 import struct
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,16 +22,6 @@ from typing import Any, Dict, List, Tuple
 from uuid import UUID
 
 from services.base_service import BaseService
-
-# Windows file time APIs for setting creation time
-try:
-    import pywintypes
-    import win32con
-    import win32file
-
-    _HAS_WIN32 = True
-except ImportError:
-    _HAS_WIN32 = False
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +128,7 @@ class RecentItemsService(BaseService):
     def service_name(self) -> str:
         return "RecentItemsService"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Generate Recent Items for the user profile.
 
         Args:
@@ -152,9 +141,9 @@ class RecentItemsService(BaseService):
         Raises:
             RecentItemsError: If Recent Items generation fails.
         """
-        username = context.get("username", "default_user")
-        profile_type = context.get("profile_type", "home_user")
-        seed = context.get("computer_name", username)
+        username = ctx.identity_bundle.user.username
+        profile_type = ctx.persona.profile_archetype
+        seed = ctx.identity_bundle.user.computer_name
 
         rng = Random(hash(seed + profile_type))
         recent_dir = (
@@ -262,22 +251,6 @@ class RecentItemsService(BaseService):
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))
 
-        # Creation time requires pywin32 on Windows
-        if _HAS_WIN32 and platform.system() == "Windows":
-            created = pywintypes.Time(timestamps["created"])
-            handle = win32file.CreateFile(
-                str(path),
-                win32con.GENERIC_WRITE,
-                win32con.FILE_SHARE_WRITE,
-                None,
-                win32con.OPEN_EXISTING,
-                win32con.FILE_ATTRIBUTE_NORMAL,
-                None,
-            )
-            try:
-                win32file.SetFileTime(handle, created, None, None)
-            finally:
-                handle.Close()
 
     def _create_lnk_file(
         self,

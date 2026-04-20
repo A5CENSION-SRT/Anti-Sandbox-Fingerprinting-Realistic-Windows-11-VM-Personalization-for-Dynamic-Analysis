@@ -46,7 +46,6 @@ except ImportError:
 
 from core.audit_logger import AuditLogger
 from core.orchestrator import Orchestrator, OrchestrationError
-from core.vm_manager import VMManager, VMManagerError
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +62,9 @@ _SERVICE_MODULES = {
         ("services.filesystem.installed_apps_stub", "InstalledAppsStub"),
         ("services.filesystem.document_generator", "DocumentGenerator"),
         ("services.filesystem.media_stub", "MediaStubService"),
+        ("services.filesystem.office_mru", "OfficeMruService"),
+        ("services.filesystem.powershell_history", "PowerShellHistoryService"),
+        ("services.filesystem.cdp_logs", "CdpLogsService"),
         ("services.filesystem.prefetch", "PrefetchService"),
         ("services.filesystem.thumbnail_cache", "ThumbnailCacheService"),
         ("services.filesystem.recent_items", "RecentItemsService"),
@@ -100,6 +102,12 @@ _SERVICE_MODULES = {
         ("services.anti_fingerprint.hardware_normalizer", "HardwareNormalizer"),
         ("services.anti_fingerprint.process_faker", "ProcessFaker"),
         ("services.anti_fingerprint.vm_scrubber", "VmScrubber"),
+        ("services.anti_fingerprint.mac_hygiene", "MacHygiene"),
+    ],
+    "ntfs": [
+        ("services.ntfs.mft_timestamp_patcher", "MftTimestampPatcher"),
+        ("services.ntfs.usn_journal_writer", "UsnJournalWriter"),
+        ("services.ntfs.logfile_writer", "LogfileWriter"),
     ],
 }
 
@@ -173,7 +181,7 @@ def merge_cli_args(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str
         merged["mount_path"] = str(args.output)
 
     if args.profile:
-        merged["profile_name"] = args.profile
+        merged["profile_path"] = str(args.profile)
 
     if args.timeline_days:
         merged["timeline_days"] = args.timeline_days
@@ -270,10 +278,9 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "-p", "--profile",
-        type=str,
-        choices=["base", "home_user", "office_user", "developer"],
+        type=Path,
         default=None,
-        help="User profile type to generate",
+        help="Path to an AI-generated persona YAML (from profiles/generated/)",
     )
 
     parser.add_argument(
@@ -309,7 +316,7 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         choices=list(_SERVICE_MODULES.keys()),
         default=None,
-        help="Service categories to execute (default: all)",
+        help="Service categories to execute (default: all); 'ntfs' requires ntfs-3g FUSE mount",
     )
 
     parser.add_argument(
@@ -379,87 +386,48 @@ def run_interactive_wizard(args: argparse.Namespace) -> argparse.Namespace:
     print("=" * 60)
     print(" ARC - Artifact Reality Composer (Interactive Setup)")
     print("=" * 60)
-    
-    # 1. Profile
-    print("\n[1/5] Select an Artifact Profile:")
-    profiles = ["developer", "office_user", "home_user", "base"]
-    for i, p in enumerate(profiles, 1):
-        print(f"  {i}. {p}")
+
+    # 1. Persona via AI
+    print("\n[1/4] Persona (AI-generated via Gemini):")
     while True:
-        choice = input("Select profile (1-4) [1]: ").strip() or "1"
-        if choice in ("1", "2", "3", "4"):
-            args.profile = profiles[int(choice) - 1]
+        occ = input("  Occupation [Software Engineer]: ").strip() or "Software Engineer"
+        if occ:
+            args.occupation = occ
+            args.ai_generate = True
             break
-        print("Invalid choice.")
 
-    # 2. Target Mode
-    print("\n[2/5] Select Target Environment:")
-    print("  1. Infect a Dormant Windows VM (VHD/VHDX)")
-    print("  2. Generate locally to a test folder")
-    while True:
-        choice = input("Select target (1-2) [1]: ").strip() or "1"
-        if choice in ("1", "2"):
-            is_vm = (choice == "1")
-            break
-        print("Invalid choice.")
+    loc = input("  Location [United States]: ").strip() or "United States"
+    args.location = loc
 
-    # 3. Path & Overrides
-    if is_vm:
-        print("\n[3/5] VM Details:")
-        while True:
-            vhdx = input("  Path to VHD/VHDX image file: ").strip()
-            if vhdx and Path(vhdx).exists():
-                args.vhdx_path = Path(vhdx)
-                break
-            print("  Error: File does not exist. Please enter a valid path.")
-        
-        print("\n  CRITICAL: To ensure the VM recognizes the artifacts,")
-        print("  you must provide the EXACT existing Windows username.")
-        while True:
-            uname = input("  Target VM Username: ").strip()
-            if uname:
-                args.override_username = uname
-                break
-            print("  Username is required for VM injection.")
-            
-        hname = input("  Target VM Computer Name (optional, ENTER to randomize): ").strip()
-        if hname:
-            args.override_hostname = hname
-    else:
-        print("\n[3/5] Local Output:")
-        out = input("  Output directory path [./output]: ").strip() or "./output"
-        args.output = Path(out)
-        
-        print("\n(Optional) Override Identifiers - press ENTER to use random generator.")
-        uname = input("  Force Username: ").strip()
-        if uname: args.override_username = uname
+    interests_raw = input("  Interests, comma-separated [coding,gaming]: ").strip() or "coding,gaming"
+    args.interests = [i.strip() for i in interests_raw.split(",")]
 
-    # 4. Timeline
-    print("\n[4/6] Timeline:")
-    while True:
-        days = input("  Days of history to generate [90]: ").strip() or "90"
-        if days.isdigit() and int(days) > 0:
-            args.timeline_days = int(days)
-            break
-        print("Please enter a valid positive number.")
+    # 2. Output
+    print("\n[2/4] Output directory:")
+    out = input("  Output path [./output]: ").strip() or "./output"
+    args.output = Path(out)
 
-    # 5. Logging
-    print("\n[5/6] Logging:")
-    verbose_choice = input("  Enable verbose (debugging) logging? (y/N): ").strip().lower()
-    if verbose_choice == 'y':
+    # 3. Overrides
+    print("\n[3/4] Identity overrides (press ENTER to let AI decide):")
+    uname = input("  Force username: ").strip()
+    if uname:
+        args.override_username = uname
+    hname = input("  Force hostname: ").strip()
+    if hname:
+        args.override_hostname = hname
+
+    # 4. Logging
+    print("\n[4/4] Logging:")
+    if input("  Verbose logging? (y/N): ").strip().lower() == "y":
         args.verbose = True
 
-    print("\n[6/6] Setup Complete!")
+    print("\n" + "=" * 60)
+    print(f" Occupation: {args.occupation}")
+    print(f" Location:   {args.location}")
+    print(f" Output:     {args.output}")
     print("=" * 60)
-    print(f" Profile :   {args.profile}")
-    print(f" Target  :   {'VM Image (' + str(args.vhdx_path) + ')' if is_vm else 'Local (' + str(args.output) + ')'}")
-    print(f" Username:   {args.override_username or '<Randomly Generated>'}")
-    print(f" Timeline:   {args.timeline_days} days")
-    print(f" Logging :   {'Verbose' if getattr(args, 'verbose', False) else 'Standard'}")
-    print("=" * 60)
-    
-    confirm = input("\nProceed with generation? (Y/n): ").strip().lower()
-    if confirm == 'n':
+
+    if input("\nProceed? (Y/n): ").strip().lower() == "n":
         print("Aborted.")
         sys.exit(0)
 
@@ -487,8 +455,6 @@ def main() -> int:
     logger = logging.getLogger(__name__)
     logger.info("ARC - Artifact Reality Composer starting...")
 
-    vm_manager = None
-    
     try:
         # Load configuration
         logger.debug("Loading config from: %s", args.config)
@@ -533,12 +499,12 @@ def main() -> int:
                 )
                 
                 if result.success:
-                    print(f"\n✓ Generated persona: {result.persona.full_name}")
-                    print(f"  Username:     {result.persona.username}")
-                    print(f"  Organization: {result.persona.organization}")
-                    
+                    print(f"\nGenerated persona : {result.persona.full_name}")
+                    print(f"  Username        : {result.persona.username}")
+                    print(f"  Organization    : {result.persona.organization}")
+
                     if result.profile_path:
-                        print(f"\n✓ Profile saved to: {result.profile_path}")
+                        print(f"  Profile saved to: {result.profile_path}")
                         
                         # Update config to use the generated profile in orchestrator.
                         generated_profile_path = Path(result.profile_path).resolve()
@@ -557,16 +523,13 @@ def main() -> int:
                         if not args.override_username:
                             config["override_username"] = result.persona.username
                     
-                    if result.used_fallback:
-                        print(f"\n  ⚠ Used fallback generators (API unavailable)")
-                    
                     print(f"\n  Generation time: {result.generation_time_ms:.1f}ms")
                     print(f"\n{'='*60}")
                     print(" Continuing with artifact generation using AI profile...")
                     print(f"{'='*60}\n")
                 else:
                     logger.error("AI profile generation failed: %s", result.errors)
-                    print(f"\n✗ AI generation failed:")
+                    print("\nAI generation failed:")
                     for err in result.errors:
                         print(f"  - {err}")
                     return 1
@@ -577,19 +540,12 @@ def main() -> int:
                 print("  pip install google-generativeai pydantic jinja2")
                 return 2
         
-        # Determine if we are doing VM direct-injection
+        # VHDX direct-injection requires VMManager (Phase 8)
         if args.vhdx_path:
-            logger.info("VM Direct Injection Mode enabled")
-            vm_manager = VMManager(str(args.vhdx_path))
-            
-            # Optionally power down a linked VM first
-            if args.vm_name:
-                vm_manager.stop_vm(args.vm_name)
-                
-            # Mount and update Mount Path
-            mounted_drive = vm_manager.mount_vhdx()
-            config["mount_path"] = mounted_drive
-            logger.info("Redirecting ARC output to %s", mounted_drive)
+            logger.warning(
+                "VHDX injection (--vhdx-path) is not yet implemented in this build. "
+                "Set mount_path in config.yaml to target a pre-mounted drive letter."
+            )
 
         # Initialize audit logger
         audit_path = Path(config.get("audit_log_path", "audit.log"))
@@ -610,8 +566,6 @@ def main() -> int:
 
         if num_services == 0:
             logger.warning("No services registered. Nothing to do.")
-            if vm_manager:
-                vm_manager.dismount_vhdx()
             return 0
 
         # Execute orchestration
@@ -632,10 +586,6 @@ def main() -> int:
         print("\nStarting generation...")
         result = orchestrator.run(progress_callback=make_progress_callback())
         
-        # Power up if everything succeeded and VM was provided
-        if result.success and vm_manager and args.vm_name:
-            vm_manager.dismount_vhdx()
-            vm_manager.start_vm(args.vm_name)
 
         # Report results
         print("\n" + "=" * 60)
@@ -687,11 +637,6 @@ def main() -> int:
         return 1
 
     finally:
-        if vm_manager:
-            try:
-                vm_manager.dismount_vhdx()
-            except Exception as dismount_err:
-                logger.error("Failed to dismount VHDX during cleanup: %s", dismount_err)
         if "orchestrator" in locals():
             orchestrator.cleanup()
 

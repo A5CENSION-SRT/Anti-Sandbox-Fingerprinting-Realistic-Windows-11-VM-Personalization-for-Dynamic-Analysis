@@ -1,6 +1,12 @@
 """Abstract base class for all services."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.service_context import ServiceContext
 
 
 class BaseService(ABC):
@@ -12,5 +18,5 @@ class BaseService(ABC):
         """Return the unique name of this service."""
 
     @abstractmethod
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute the service's primary operation."""

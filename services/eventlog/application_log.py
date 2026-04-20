@@ -26,7 +26,10 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from random import Random
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from services.ai.schemas import EvtxSeed, EvtxEventStub
 
 from services.base_service import BaseService
 from services.eventlog.evtx_writer import EvtxRecord, EvtxWriter, EvtxWriterError
@@ -154,29 +157,25 @@ class ApplicationLog(BaseService):
         """Return the unique service name."""
         return "ApplicationLog"
 
-    def apply(self, context: dict) -> None:
-        """Execute from orchestrator context.
+    def apply(self, ctx: "ServiceContext") -> None:
+        """Execute from orchestrator context."""
+        expansion = getattr(ctx, "expansion", None)
+        evtx_seed = getattr(expansion, "evtx", None) if expansion is not None else None
 
-        Expects context keys:
-            profile_type:  str — ``"home"``, ``"office"``, or ``"developer"``.
-            computer_name: str — VM computer name.
-            username:      str — Windows username.
-            install_time:  datetime — UTC reference time for install events.
-
-        Raises:
-            ApplicationLogError: On missing context keys or write failure.
-        """
-        for key in ("profile_type", "computer_name", "username", "install_time"):
-            if not context.get(key):
-                raise ApplicationLogError(
-                    f"Missing required '{key}' in context"
-                )
-        self.write_application_log(
-            profile_type=context["profile_type"],
-            computer_name=context["computer_name"],
-            username=context["username"],
-            install_time=context["install_time"],
-        )
+        if evtx_seed is not None and evtx_seed.application_events:
+            self._write_from_seed(
+                seed=evtx_seed,
+                computer_name=ctx.identity_bundle.user.computer_name,
+                install_time=ctx.install_time,
+                timeline_days=ctx.persona.timeline_days,
+            )
+        else:
+            self.write_application_log(
+                profile_type=ctx.persona.profile_archetype,
+                computer_name=ctx.identity_bundle.user.computer_name,
+                username=ctx.identity_bundle.user.username,
+                install_time=ctx.install_time,
+            )
 
     # -- public API ---------------------------------------------------------
 
@@ -272,6 +271,82 @@ class ApplicationLog(BaseService):
             )
 
         return records
+
+    # -- seed-driven path ---------------------------------------------------
+
+    def _write_from_seed(
+        self,
+        seed: "EvtxSeed",
+        computer_name: str,
+        install_time: datetime,
+        timeline_days: int,
+    ) -> None:
+        """Write Application.evtx records driven by an EvtxSeed.
+
+        One-shot stubs are emitted once; recurring stubs repeat every
+        ``recurrence_days`` days across the full timeline_days window.
+
+        Args:
+            seed:          EvtxSeed from the expansion bundle.
+            computer_name: VM computer name for the Computer XML element.
+            install_time:  Start of the simulated timeline (UTC).
+            timeline_days: Length of the timeline in days.
+        """
+        rng = Random(hash(computer_name + seed.seed_id))
+        if install_time.tzinfo is None:
+            install_time = install_time.replace(tzinfo=timezone.utc)
+
+        records: List[EvtxRecord] = []
+        cursor = install_time
+
+        for stub in seed.application_events:
+            if stub.recurrence_days is None:
+                records.append(self._stub_to_record(stub, computer_name, cursor))
+                cursor += timedelta(hours=rng.uniform(0.5, 24.0))
+            else:
+                t = cursor + timedelta(days=rng.uniform(0, stub.recurrence_days))
+                while (t - install_time).days < timeline_days:
+                    records.append(self._stub_to_record(stub, computer_name, t))
+                    t += timedelta(days=stub.recurrence_days + rng.randint(-1, 1))
+
+        try:
+            self._evtx_writer.write_records(records, _APPLICATION_EVTX)
+        except EvtxWriterError as exc:
+            raise ApplicationLogError(
+                f"Failed to write Application event log from seed: {exc}"
+            ) from exc
+
+        self._audit_logger.log({
+            "service": self.service_name,
+            "operation": "write_application_log_from_seed",
+            "computer_name": computer_name,
+            "seed_id": seed.seed_id,
+            "record_count": len(records),
+        })
+        logger.info(
+            "Application log written from seed '%s': %d records for %s",
+            seed.seed_id, len(records), computer_name,
+        )
+
+    def _stub_to_record(
+        self,
+        stub: "EvtxEventStub",
+        computer_name: str,
+        ts: datetime,
+    ) -> EvtxRecord:
+        """Convert an EvtxEventStub to an EvtxRecord at the given timestamp."""
+        return EvtxRecord(
+            channel=_CHANNEL,
+            event_id=stub.event_id,
+            level=stub.level,
+            provider=stub.provider,
+            computer=computer_name,
+            timestamp=ts,
+            event_data=stub.data if stub.data else {"Description": stub.description},
+            keywords="0x8000000000000000",
+            task=0,
+            opcode=0,
+        )
 
     # -- record builders ----------------------------------------------------
 

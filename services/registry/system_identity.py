@@ -112,7 +112,7 @@ class SystemIdentity(BaseService):
         """Return the unique service name."""
         return "SystemIdentity"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -121,15 +121,7 @@ class SystemIdentity(BaseService):
         Raises:
             SystemIdentityError: If the bundle is missing or writes fail.
         """
-        bundle = context.get("identity_bundle")
-        if bundle is None:
-            raise SystemIdentityError(
-                "Missing required 'identity_bundle' in context"
-            )
-        if not isinstance(bundle, IdentityBundle):
-            raise SystemIdentityError(
-                f"Expected IdentityBundle, got {type(bundle).__name__}"
-            )
+        bundle = ctx.identity_bundle
         self.write_identity(bundle)
 
     # -- public API ---------------------------------------------------------

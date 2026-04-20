@@ -47,15 +47,12 @@ class BrowserProfileService(BaseService):
     def service_name(self) -> str:
         return "BrowserProfile"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create browser profile directories and config files."""
-        profile = context.get("profile_name", self._profile_name)
-        user = context.get("username", self._username)
-        browsers = context.get("browsers", None)
+        profile = ctx.persona.profile_archetype
+        user = ctx.identity_bundle.user.username
 
         for name, ud_rel in BROWSERS:
-            if browsers and name not in browsers:
-                continue
             self._create_profile(name, ud_rel, profile, user)
 
     # ------------------------------------------------------------------

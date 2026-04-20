@@ -122,7 +122,7 @@ class CommsApps(BaseService):
     def service_name(self) -> str:
         return "CommsApps"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create comm-app artifacts for apps in the profile.
 
         Args:
@@ -135,9 +135,9 @@ class CommsApps(BaseService):
         Raises:
             CommsAppsError: If file creation fails.
         """
-        username = context.get("username", "default_user")
-        profile = context.get("profile_type", "home_user")
-        installed = set(context.get("installed_apps", []))
+        username = ctx.identity_bundle.user.username
+        profile = ctx.persona.profile_archetype
+        installed = set(ctx.persona.installed_apps)
 
         profile_comms = _PROFILE_COMMS.get(profile, [])
         # Only create artifacts for apps present in both lists

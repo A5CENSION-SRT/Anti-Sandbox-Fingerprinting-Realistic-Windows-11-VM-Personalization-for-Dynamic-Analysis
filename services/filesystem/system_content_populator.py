@@ -268,7 +268,7 @@ class SystemContentPopulator(BaseService):
     def service_name(self) -> str:
         return "SystemContentPopulator"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Populate empty directories with realistic content.
 
         Runs in EVALUATION phase (last) so every other service has
@@ -278,9 +278,9 @@ class SystemContentPopulator(BaseService):
         Args:
             context: Runtime context with ``username``, ``profile_type``.
         """
-        username = context.get("username", "default_user")
-        profile_type = context.get("profile_type", "home_user")
-        seed = context.get("computer_name", username)
+        username = ctx.identity_bundle.user.username
+        profile_type = ctx.persona.profile_archetype
+        seed = ctx.identity_bundle.user.computer_name
         rng = Random(hash(seed + "syscontent"))
 
         created = 0
@@ -909,33 +909,12 @@ class SystemContentPopulator(BaseService):
     def _apply_ts(self, path: Path, event_type: str) -> None:
         """Apply timestamps from the timestamp service."""
         import os
-        import platform
 
         timestamps = self._ts.get_timestamp(event_type)
         accessed = timestamps["accessed"].timestamp()
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))
 
-        try:
-            import pywintypes
-            import win32con
-            import win32file
-            if platform.system() == "Windows":
-                created = pywintypes.Time(timestamps["created"])
-                handle = win32file.CreateFile(
-                    str(path), win32con.GENERIC_WRITE,
-                    win32con.FILE_SHARE_WRITE, None,
-                    win32con.OPEN_EXISTING,
-                    win32con.FILE_ATTRIBUTE_NORMAL, None,
-                )
-                try:
-                    win32file.SetFileTime(handle, created, None, None)
-                finally:
-                    handle.Close()
-        except ImportError:
-            pass
-        except Exception as exc:
-            logger.debug("Could not set creation time for %s: %s", path, exc)
 
     @staticmethod
     def _dll_stub_32bit(size_kb: int = 32) -> bytes:

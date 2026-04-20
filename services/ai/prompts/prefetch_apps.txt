@@ -1,0 +1,50 @@
+You are generating a Windows Prefetch file manifest for a forensic simulation.
+
+**Persona**: {full_name}
+**Occupation**: {occupation}
+**Profile archetype**: {profile_archetype}
+**Installed apps**: {installed_apps}
+**Activity timeline**: {timeline_days} days
+
+Generate a PrefetchAppSeed JSON object containing one PrefetchEntry per executable that
+would have a .pf file in C:\Windows\Prefetch\ for this persona.
+
+Rules for a realistic Prefetch manifest:
+
+1. **Always include Windows system executables** (every machine has these):
+   EXPLORER.EXE, SVCHOST.EXE, CONHOST.EXE, NOTEPAD.EXE, TASKMGR.EXE,
+   MSIEXEC.EXE, DISM.EXE, POWERSHELL.EXE, CMD.EXE, RUNDLL32.EXE,
+   WMIPRVSE.EXE, SEARCHINDEXER.EXE, SEARCHHOST.EXE, WINLOGON.EXE.
+
+2. **Include profile-appropriate apps** from the installed_apps list above:
+   - Map each to its real executable name and full uppercase path.
+   - Chrome.exe path: C:\PROGRAM FILES\GOOGLE\CHROME\APPLICATION\CHROME.EXE
+   - VSCode: C:\PROGRAM FILES\MICROSOFT VS CODE\CODE.EXE
+   - Office apps: C:\PROGRAM FILES\MICROSOFT OFFICE\ROOT\OFFICE16\{APP}.EXE
+
+3. **run_count must be realistic**:
+   - Daily apps over {timeline_days} days: ~50–800 runs (browser, IDE, email).
+   - Weekly apps: ~10–100 runs.
+   - System processes: 1–30 (they're started by Windows, not the user).
+   - Run count ≤ 9999 (SCCA header field limit).
+
+4. **exe_name** must be UPPERCASE, filename only (no path).
+5. **exe_path** must be UPPERCASE, full absolute Windows path.
+6. **last_run_offset_h**: Hours before "now" when the app was last run (1–720).
+
+Output ONLY valid JSON matching PrefetchAppSeed schema:
+
+{
+  "seed_id": "prefetch_<archetype>",
+  "context": "...",
+  "entries": [
+    {
+      "exe_name": "CODE.EXE",
+      "exe_path": "C:\\PROGRAM FILES\\MICROSOFT VS CODE\\CODE.EXE",
+      "run_count": 847,
+      "last_run_offset_h": 3
+    }
+  ]
+}
+
+Generate 20–40 entries total. No markdown, no commentary.

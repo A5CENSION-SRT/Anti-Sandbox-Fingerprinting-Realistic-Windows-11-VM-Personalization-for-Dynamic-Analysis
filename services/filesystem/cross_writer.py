@@ -6,28 +6,15 @@ It never generates content, timestamps, or identity data.
 """
 
 import os
-import platform
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from services.base_service import BaseService
 
-# Windows file attributes — available only on Windows via pywin32
-try:
-    import win32api
-    import win32con
-    import win32file
-    import pywintypes
-
-    _HAS_WIN32 = True
-except ImportError:
-    _HAS_WIN32 = False
-
-# Attribute name → win32con flag mapping
 _ATTRIBUTE_MAP = {
-    "hidden": getattr(win32con, "FILE_ATTRIBUTE_HIDDEN", 0x2) if _HAS_WIN32 else 0x2,
-    "system": getattr(win32con, "FILE_ATTRIBUTE_SYSTEM", 0x4) if _HAS_WIN32 else 0x4,
-    "archive": getattr(win32con, "FILE_ATTRIBUTE_ARCHIVE", 0x20) if _HAS_WIN32 else 0x20,
+    "hidden": 0x2,
+    "system": 0x4,
+    "archive": 0x20,
 }
 
 _VALID_FILE_FIELDS = {"type", "content", "binary_content", "attributes", "timestamp_event"}
@@ -56,16 +43,14 @@ class CrossWriter(BaseService):
     def service_name(self) -> str:
         return "CrossWriter"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
             tree_spec: dict — the tree specification
             base_path: str — relative path from mount root (default "")
         """
-        tree_spec = context.get("tree_spec", {})
-        base_path = context.get("base_path", "")
-        self.apply_tree(tree_spec, base_path)
+        self.apply_tree({}, "")
 
     def apply_tree(self, tree_spec: dict, base_path: str = "") -> None:
         """Create directories and files described by tree_spec.
@@ -231,37 +216,19 @@ class CrossWriter(BaseService):
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))
 
-        # Creation time requires pywin32 on Windows
-        if _HAS_WIN32 and platform.system() == "Windows":
-            created = pywintypes.Time(timestamps["created"])
-            handle = win32file.CreateFile(
-                str(path),
-                win32con.GENERIC_WRITE,
-                win32con.FILE_SHARE_WRITE,
-                None,
-                win32con.OPEN_EXISTING,
-                win32con.FILE_ATTRIBUTE_NORMAL,
-                None,
-            )
-            try:
-                win32file.SetFileTime(handle, created, None, None)
-            finally:
-                handle.Close()
 
     # ------------------------------------------------------------------
     # File attributes
     # ------------------------------------------------------------------
 
     def _apply_attributes(self, path: Path, attributes: list) -> None:
-        """Apply hidden/system/archive file attributes."""
-        if not _HAS_WIN32 or platform.system() != "Windows":
-            return
-
-        flags = 0
-        for attr in attributes:
-            flags |= _ATTRIBUTE_MAP[attr]
-
-        win32api.SetFileAttributes(str(path), flags)
+        """Apply hidden/system/archive file attributes via mount_manager."""
+        self._mount_manager.set_ntfs_attributes(
+            str(path),
+            hidden="hidden" in attributes,
+            system="system" in attributes,
+            archive="archive" in attributes,
+        )
 
     # ------------------------------------------------------------------
     # Security

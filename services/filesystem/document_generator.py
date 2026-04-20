@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 import struct
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,16 +21,6 @@ from random import Random
 from typing import Any, Dict, List, Optional, Tuple
 
 from services.base_service import BaseService
-
-# Windows file time APIs for setting creation time
-try:
-    import pywintypes
-    import win32con
-    import win32file
-
-    _HAS_WIN32 = True
-except ImportError:
-    _HAS_WIN32 = False
 
 logger = logging.getLogger(__name__)
 
@@ -316,112 +305,137 @@ class DocumentGenerator(BaseService):
     def service_name(self) -> str:
         return "DocumentGenerator"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Generate documents for the user profile.
 
-        Args:
-            context: Runtime context dict. Recognised keys:
+        Primary path: writes all ``DocumentDescriptor`` entries from
+        ``ctx.expansion.documents`` (populated by ExpansionOrchestrator —
+        typically 3,000-5,000 files at 360-day scale).
 
-                * ``username`` (str) — Windows username.
-                * ``profile_type`` (str) — ``home_user`` / ``office_user`` / ``developer``.
-                * ``computer_name`` (str) — used as RNG seed.
-                * ``timeline_days`` (int) — days of history to simulate.
+        Fallback: if no expansion bundle is present, writes the small
+        hardcoded profile-specific document list (~10-15 files).
 
         Raises:
             DocumentGeneratorError: If document creation fails.
         """
-        username = context.get("username", "default_user")
-        profile_type = context.get("profile_type", "home_user")
-        seed = context.get("computer_name", username)
-        timeline_days = context.get("timeline_days", 90)
+        username = ctx.identity_bundle.user.username
+        profile_type = ctx.persona.profile_archetype
+        seed = ctx.identity_bundle.user.computer_name
 
         rng = Random(hash(seed + profile_type))
-        docs_dir = Path("Users") / username / "Documents"
-        created_files = []
+        created_files = 0
 
         try:
-            # Get documents for this profile
-            documents = _PROFILE_DOCUMENTS.get(profile_type, [])
-            generated_pdf = False
-            available_pdf_count = sum(
-                1 for d in documents if d.get("type") == "pdf"
-            )
-
-            for doc_spec in documents:
-                doc_type = doc_spec["type"]
-
-                # Randomly skip some documents for variety
-                if rng.random() < 0.1:
-                    # Keep at least one PDF when profile defines PDF artifacts.
-                    if not (
-                        doc_type == "pdf"
-                        and available_pdf_count > 0
-                        and not generated_pdf
-                    ):
-                        continue
-
-                file_path = docs_dir / doc_spec["name"]
-
-                # Generate content based on type
-                if doc_type == "txt":
-                    content = self._generate_text_content(
-                        doc_spec.get("content", "notes"),
-                        rng,
-                    )
-                    self._write_file(file_path, content.encode("utf-8"))
-                elif doc_type == "json":
-                    content = self._generate_text_content(
-                        doc_spec.get("content", "config"),
-                        rng,
-                    )
-                    self._write_file(file_path, content.encode("utf-8"))
-                elif doc_type == "docx":
-                    size_range = doc_spec.get("size", (4096, 16384))
-                    content = self._generate_docx_stub(rng, size_range)
-                    self._write_file(file_path, content)
-                elif doc_type == "xlsx":
-                    size_range = doc_spec.get("size", (4096, 16384))
-                    content = self._generate_xlsx_stub(rng, size_range)
-                    self._write_file(file_path, content)
-                elif doc_type == "pdf":
-                    size_range = doc_spec.get("size", (8192, 32768))
-                    content = self._generate_pdf_stub(rng, size_range)
-                    self._write_file(file_path, content)
-                    generated_pdf = True
-
-                created_files.append(str(file_path))
-
-            # If all PDF entries were skipped by randomness, force-create one.
-            if available_pdf_count > 0 and not generated_pdf:
-                for doc_spec in documents:
-                    if doc_spec.get("type") != "pdf":
-                        continue
-                    file_path = docs_dir / doc_spec["name"]
-                    size_range = doc_spec.get("size", (8192, 32768))
-                    content = self._generate_pdf_stub(rng, size_range)
-                    self._write_file(file_path, content)
-                    created_files.append(str(file_path))
-                    generated_pdf = True
-                    break
+            if ctx.expansion is not None and ctx.expansion.documents:
+                created_files = self._write_expansion_documents(
+                    ctx.expansion.documents, username, rng
+                )
+            else:
+                created_files = self._write_hardcoded_documents(
+                    profile_type, username, rng
+                )
 
             self._audit.log({
                 "service": self.service_name,
                 "operation": "generate_documents",
                 "username": username,
                 "profile_type": profile_type,
-                "files_created": len(created_files),
+                "files_created": created_files,
             })
-
             logger.info(
                 "Generated %d documents for user '%s' (%s profile)",
-                len(created_files), username, profile_type,
+                created_files, username, profile_type,
             )
 
         except Exception as exc:
-            logger.error("Failed to generate documents: %s", exc)
             raise DocumentGeneratorError(
                 f"Document generation failed: {exc}"
             ) from exc
+
+    def _write_expansion_documents(
+        self,
+        descriptors: list,
+        username: str,
+        rng: Random,
+    ) -> int:
+        """Write document files from ExpansionBundle descriptors.
+
+        Args:
+            descriptors: List of DocumentDescriptor from the expansion bundle.
+            username:    Windows username (for path substitution).
+            rng:         RNG for content generation.
+
+        Returns:
+            Number of files written.
+        """
+        written = 0
+        for desc in descriptors:
+            rel_path = Path(
+                str(desc.relative_path).replace("{username}", username)
+            )
+            ext = rel_path.suffix.lower()
+
+            if desc.content:
+                raw: bytes = desc.content if isinstance(desc.content, bytes) else desc.content.encode("utf-8")
+            elif ext in (".docx",):
+                raw = self._generate_docx_stub(rng, (4096, 32768))
+            elif ext in (".xlsx",):
+                raw = self._generate_xlsx_stub(rng, (4096, 16384))
+            elif ext in (".pdf",):
+                raw = self._generate_pdf_stub(rng, (8192, 65536))
+            else:
+                raw = self._generate_text_content("notes", rng).encode("utf-8")
+
+            self._write_file(rel_path, raw)
+            written += 1
+
+        return written
+
+    def _write_hardcoded_documents(
+        self,
+        profile_type: str,
+        username: str,
+        rng: Random,
+    ) -> int:
+        """Write the small hardcoded document list for this profile type."""
+        docs_dir = Path("Users") / username / "Documents"
+        documents = _PROFILE_DOCUMENTS.get(profile_type, [])
+        created = 0
+        generated_pdf = False
+        available_pdf_count = sum(1 for d in documents if d.get("type") == "pdf")
+
+        for doc_spec in documents:
+            doc_type = doc_spec["type"]
+            if rng.random() < 0.1:
+                if not (doc_type == "pdf" and available_pdf_count > 0 and not generated_pdf):
+                    continue
+
+            file_path = docs_dir / doc_spec["name"]
+            if doc_type in ("txt", "json"):
+                content = self._generate_text_content(doc_spec.get("content", "notes"), rng)
+                self._write_file(file_path, content.encode("utf-8"))
+            elif doc_type == "docx":
+                self._write_file(file_path, self._generate_docx_stub(rng, doc_spec.get("size", (4096, 16384))))
+            elif doc_type == "xlsx":
+                self._write_file(file_path, self._generate_xlsx_stub(rng, doc_spec.get("size", (4096, 16384))))
+            elif doc_type == "pdf":
+                self._write_file(file_path, self._generate_pdf_stub(rng, doc_spec.get("size", (8192, 32768))))
+                generated_pdf = True
+            created += 1
+
+        if available_pdf_count > 0 and not generated_pdf:
+            for doc_spec in documents:
+                if doc_spec.get("type") != "pdf":
+                    continue
+                file_path = docs_dir / doc_spec["name"]
+                self._write_file(
+                    file_path,
+                    self._generate_pdf_stub(rng, doc_spec.get("size", (8192, 32768))),
+                )
+                created += 1
+                break
+
+        return created
 
     def _write_file(
         self,
@@ -464,22 +478,6 @@ class DocumentGenerator(BaseService):
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))
 
-        # Creation time requires pywin32 on Windows
-        if _HAS_WIN32 and platform.system() == "Windows":
-            created = pywintypes.Time(timestamps["created"])
-            handle = win32file.CreateFile(
-                str(path),
-                win32con.GENERIC_WRITE,
-                win32con.FILE_SHARE_WRITE,
-                None,
-                win32con.OPEN_EXISTING,
-                win32con.FILE_ATTRIBUTE_NORMAL,
-                None,
-            )
-            try:
-                win32file.SetFileTime(handle, created, None, None)
-            finally:
-                handle.Close()
 
     def _generate_text_content(
         self,

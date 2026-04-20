@@ -102,7 +102,7 @@ class EmailClient(BaseService):
     def service_name(self) -> str:
         return "EmailClient"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create email client artifacts if email apps are installed.
 
         Args:
@@ -117,11 +117,11 @@ class EmailClient(BaseService):
         Raises:
             EmailClientError: If file creation fails.
         """
-        username = context.get("username", "default_user")
-        profile = context.get("profile_type", "home_user")
-        installed = set(context.get("installed_apps", []))
-        org = context.get("organization", "personal")
-        seed = context.get("computer_name", username)
+        username = ctx.identity_bundle.user.username
+        profile = ctx.persona.profile_archetype
+        installed = set(ctx.persona.installed_apps)
+        org = ctx.identity_bundle.user.organization
+        seed = ctx.identity_bundle.user.computer_name
 
         if not _EMAIL_APPS.intersection(installed):
             logger.debug("No email apps in profile — skipping EmailClient")

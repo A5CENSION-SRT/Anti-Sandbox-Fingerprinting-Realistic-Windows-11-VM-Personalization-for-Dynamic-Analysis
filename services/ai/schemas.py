@@ -1,32 +1,34 @@
-"""Pydantic schemas for AI-generated persona and artifact data.
+"""Pydantic schemas for AI-generated artifact seed data.
 
-All models use frozen=True and extra='forbid' for immutability and strict
-validation. These schemas define the contract between Gemini outputs and
-the local permutation engines.
+PersonaContext is the canonical schema from core.persona_context.
+This module defines artifact seed schemas (Tier 1 → Tier 2 interface).
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from enum import Enum
 from typing import Any, Dict, List, Optional
+
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from core.persona_context import (
+    PersonaContext,
+    PersonaInterests,
+    PersonaWorkStyle,
+    TechProficiency,
+)
 
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
-
-class TechProficiency(str, Enum):
-    """User's technical skill level."""
-    LOW = "low"
-    INTERMEDIATE = "intermediate"
-    HIGH = "high"
+__all__ = [
+    "PersonaContext",
+    "PersonaInterests",
+    "PersonaWorkStyle",
+    "TechProficiency",
+]
 
 
 class VisitFrequency(str, Enum):
-    """How often a URL is typically visited."""
     DAILY = "daily"
     MULTIPLE_DAILY = "multiple_daily"
     WEEKLY = "weekly"
@@ -36,7 +38,6 @@ class VisitFrequency(str, Enum):
 
 
 class FileCategory(str, Enum):
-    """Document category for content generation."""
     WORK = "work"
     PERSONAL = "personal"
     FINANCIAL = "financial"
@@ -45,104 +46,10 @@ class FileCategory(str, Enum):
 
 
 class MediaType(str, Enum):
-    """Type of media file."""
     PHOTO = "photo"
     VIDEO = "video"
     MUSIC = "music"
     SCREENSHOT = "screenshot"
-
-
-# ---------------------------------------------------------------------------
-# Persona Context (Tier 1 Output)
-# ---------------------------------------------------------------------------
-
-class PersonaInterests(BaseModel):
-    """User interests derived from persona."""
-    
-    model_config = {"frozen": True, "extra": "forbid"}
-    
-    hobbies: List[str] = Field(
-        ..., min_length=3, max_length=10,
-        description="Personal hobbies and interests"
-    )
-    professional_topics: List[str] = Field(
-        ..., min_length=2, max_length=8,
-        description="Work-related topics they follow"
-    )
-    entertainment: List[str] = Field(
-        default_factory=list,
-        description="Entertainment preferences (shows, music genres, games)"
-    )
-
-
-class PersonaWorkStyle(BaseModel):
-    """Work patterns and preferences."""
-    
-    model_config = {"frozen": True, "extra": "forbid"}
-    
-    description: str = Field(..., description="Brief work style description")
-    typical_tools: List[str] = Field(
-        ..., description="Software/tools they use daily"
-    )
-    collaboration_style: str = Field(
-        default="hybrid",
-        description="solo, collaborative, or hybrid"
-    )
-    meeting_frequency: str = Field(
-        default="moderate",
-        description="low, moderate, or high"
-    )
-
-
-class PersonaContext(BaseModel):
-    """Complete AI-generated persona for artifact generation.
-    
-    This is the primary output of the Gemini PersonaGenerator and serves
-    as input to all seed generators.
-    """
-    
-    model_config = {"frozen": True, "extra": "forbid"}
-    
-    # Core identity
-    full_name: str = Field(..., description="Realistic full name")
-    username: str = Field(..., pattern=r"^[a-z][a-z0-9_.]{2,19}$",
-                          description="Windows username (firstname.lastname)")
-    email: str = Field(..., description="Email address")
-    organization: str = Field(..., description="Company/organization name")
-    occupation: str = Field(..., description="Job title or role")
-    department: Optional[str] = Field(None, description="Department if applicable")
-    
-    # Demographics
-    age_range: str = Field(..., pattern=r"^\d{2}-\d{2}$",
-                           description="Age range like '28-35'")
-    locale: str = Field(default="en_US", description="Locale code")
-    location: Optional[str] = Field(None, description="City/region")
-    
-    # Behavioral attributes
-    tech_proficiency: TechProficiency = Field(
-        default=TechProficiency.INTERMEDIATE,
-        description="Technical skill level"
-    )
-    interests: PersonaInterests = Field(..., description="User interests")
-    work_style: PersonaWorkStyle = Field(..., description="Work patterns")
-    
-    # Computed context for generators
-    project_names: List[str] = Field(
-        ..., min_length=3, max_length=15,
-        description="Realistic project names they'd work on"
-    )
-    colleague_names: List[str] = Field(
-        ..., min_length=5, max_length=20,
-        description="Names of colleagues for document personalization"
-    )
-    
-    # Schedule
-    work_hours_start: int = Field(default=9, ge=0, le=23)
-    work_hours_end: int = Field(default=17, ge=0, le=23)
-    active_days: List[int] = Field(
-        default=[1, 2, 3, 4, 5],
-        description="ISO weekdays (1=Mon, 7=Sun)"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -356,16 +263,123 @@ class FilenameSeed(ArtifactSeed):
 
 
 # ---------------------------------------------------------------------------
+# Registry Seeds
+# ---------------------------------------------------------------------------
+
+class RegistryAppEntry(BaseModel):
+    """One UserAssist entry — an application with run statistics."""
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    exe_path: str = Field(..., description="Full Windows path to the executable")
+    run_count: int = Field(..., ge=1, description="Number of times the app was launched")
+    focus_count: int = Field(default=0, ge=0, description="Number of focus events")
+    focus_time_ms: int = Field(default=0, ge=0, description="Total focus time in milliseconds")
+
+
+class RegistrySeed(BaseModel):
+    """Registry MRU / UserAssist artifact seeds."""
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    seed_id: str = Field(..., description="Unique identifier")
+    context: str = Field(..., description="Why these registry artifacts exist")
+    run_mru_entries: List[str] = Field(
+        default_factory=list,
+        description="Entries for HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RunMRU"
+    )
+    typed_paths: List[str] = Field(
+        default_factory=list,
+        description="Entries for Explorer TypedPaths (address bar history)"
+    )
+    userassist_apps: List[RegistryAppEntry] = Field(
+        default_factory=list,
+        description="UserAssist ROT13 application run records"
+    )
+    recent_doc_extensions: Dict[str, int] = Field(
+        default_factory=dict,
+        description="Extension → count for RecentDocs MRU"
+    )
+
+
+# ---------------------------------------------------------------------------
+# EVTX Seeds
+# ---------------------------------------------------------------------------
+
+class EvtxEventStub(BaseModel):
+    """Template for a repeating Application event log record."""
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    event_id: int = Field(..., ge=0, le=65535)
+    provider: str = Field(..., description="Event provider / source name")
+    level: int = Field(default=4, description="0=LogAlways 1=Critical 2=Error 3=Warn 4=Info")
+    description: str = Field(..., description="Human-readable event description")
+    data: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="EventData name→value pairs"
+    )
+    recurrence_days: Optional[int] = Field(
+        None, ge=1,
+        description="If set, repeat every N days across the timeline; else one-shot"
+    )
+
+
+class EvtxSeed(BaseModel):
+    """Application event log seeds for a persona."""
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    seed_id: str = Field(..., description="Unique identifier")
+    context: str = Field(..., description="Why these events exist")
+    application_events: List[EvtxEventStub] = Field(
+        default_factory=list,
+        description="Events written to the Application channel"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prefetch Seeds
+# ---------------------------------------------------------------------------
+
+class PrefetchEntry(BaseModel):
+    """One prefetch file specification."""
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    exe_name: str = Field(..., description="Uppercase EXE filename, e.g. CODE.EXE")
+    exe_path: str = Field(..., description="Full uppercase Windows path to the executable")
+    run_count: int = Field(..., ge=1, le=9999, description="Number of recorded launches")
+    last_run_offset_h: int = Field(
+        default=8, ge=0,
+        description="Hours before 'now' for the most recent run timestamp"
+    )
+
+
+class PrefetchAppSeed(BaseModel):
+    """Prefetch file list and run-count distribution for a persona."""
+
+    model_config = {"frozen": True, "extra": "forbid"}
+
+    seed_id: str = Field(..., description="Unique identifier")
+    context: str = Field(..., description="Why these apps were used")
+    entries: List[PrefetchEntry] = Field(
+        ..., min_length=5,
+        description="One entry per .pf file to generate"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Aggregated Seed Collection
 # ---------------------------------------------------------------------------
 
 class ProfileSeeds(BaseModel):
     """Complete seed collection for a persona."""
-    
+
     model_config = {"frozen": True, "extra": "forbid"}
-    
+
     persona: PersonaContext = Field(..., description="The persona these seeds are for")
-    
+
     downloads: List[DownloadSeed] = Field(
         default_factory=list,
         description="Download artifact seeds"
@@ -385,7 +399,16 @@ class ProfileSeeds(BaseModel):
         default_factory=list,
         description="Reusable filename patterns"
     )
-    
+    registry: Optional[RegistrySeed] = Field(
+        None, description="Registry MRU / UserAssist seeds"
+    )
+    evtx: Optional[EvtxSeed] = Field(
+        None, description="Application event log seeds"
+    )
+    prefetch: Optional[PrefetchAppSeed] = Field(
+        None, description="Prefetch file list and run-count distribution"
+    )
+
     # Metadata
     generated_at: datetime = Field(
         default_factory=datetime.utcnow,
@@ -395,7 +418,7 @@ class ProfileSeeds(BaseModel):
         default="gemini-2.0-flash",
         description="Model used for generation"
     )
-    
+
     def total_seed_count(self) -> int:
         """Return total number of seeds across all categories."""
         count = len(self.downloads) + len(self.documents) + len(self.media)
@@ -403,4 +426,8 @@ class ProfileSeeds(BaseModel):
         if self.browsing:
             count += len(self.browsing.url_patterns)
             count += len(self.browsing.search_term_themes)
+        if self.registry:
+            count += len(self.registry.userassist_apps)
+        if self.prefetch:
+            count += len(self.prefetch.entries)
         return count

@@ -190,7 +190,7 @@ class CookiesCacheService(BaseService):
     def service_name(self) -> str:
         return "CookiesCache"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create Cookies DBs and Cache stubs for all configured browsers.
 
         Args:
@@ -206,19 +206,14 @@ class CookiesCacheService(BaseService):
         Raises:
             CookiesCacheError: If database creation fails.
         """
-        profile = context.get("profile_name", self._profile_name)
-        user = context.get("username", self._username)
-        browsers = context.get("browsers", None)
-        categories = (
-            context.get("browsing", {}).get("categories", ["general"])
-        )
-        seed = context.get("computer_name", user)
-        timeline_days = context.get("timeline_days", 90)
+        profile = ctx.persona.profile_archetype
+        user = ctx.identity_bundle.user.username
+        categories = ctx.persona.browsing_categories
+        seed = ctx.identity_bundle.user.computer_name
+        timeline_days = ctx.persona.timeline_days
         rng = random.Random(hash(seed + profile))
 
         for browser_name, ud_rel in BROWSERS:
-            if browsers and browser_name not in browsers:
-                continue
             pf_path = os.path.join("Users", user, ud_rel, "Default")
             self._create_cookies_db(
                 browser_name, pf_path, categories, rng, timeline_days,

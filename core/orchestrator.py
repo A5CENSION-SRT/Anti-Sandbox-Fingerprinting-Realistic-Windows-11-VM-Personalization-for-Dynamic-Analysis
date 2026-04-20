@@ -23,12 +23,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Type
 
-import yaml
+import random as _random_mod
 
 from core.audit_logger import AuditLogger
+from core.event_scheduler import EventScheduler
 from core.identity_generator import IdentityGenerator
 from core.mount_manager import MountManager
-from core.profile_engine import ProfileEngine
+from core.persona_loader import PersonaLoaderError, load_yaml
+from core.service_context import ServiceContext
 from core.timestamp_service import TimestampService
 
 logger = logging.getLogger(__name__)
@@ -134,57 +136,69 @@ def _create_minimal_hive(path: Path) -> None:
 
 class ExecutionPhase(Enum):
     """Execution phases for service ordering."""
-    INFRASTRUCTURE = 1  # Core setup (directories, identity)
-    FILESYSTEM = 2      # File artifacts
-    REGISTRY = 3        # Registry hives
-    BROWSER = 4         # Browser profiles
-    APPLICATIONS = 5    # Application artifacts
-    EVENTLOG = 6        # Event logs
-    ANTI_FINGERPRINT = 7  # Anti-fingerprint measures
-    EVALUATION = 8      # Final validation
+    INFRASTRUCTURE = 1    # Core setup (directories, identity)
+    EXPANSION = 2         # Seed → artifact expansion (Phase 2)
+    FILESYSTEM = 3        # File artifacts
+    REGISTRY = 4          # Registry hives
+    BROWSER = 5           # Browser profiles
+    APPLICATIONS = 6      # Application artifacts
+    EVENTLOG = 7          # Event logs
+    ANTI_FINGERPRINT = 8  # Anti-fingerprint measures
+    NTFS = 9              # NTFS journal + MFT timestamp patching (requires FUSE mount)
+    EVALUATION = 10       # Final validation
 
 
 # Service -> Phase mapping
 _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
-    # Phase 1: Infrastructure
+    # Infrastructure
     "UserDirectoryService": ExecutionPhase.INFRASTRUCTURE,
-    # SystemContentPopulator runs in EVALUATION (last) to sweep empty dirs
-    "SystemContentPopulator": ExecutionPhase.EVALUATION,
-    # Phase 2: Filesystem
+    # Expansion (Phase 2) — seeds → artifact bundles
+    "ExpansionOrchestrator": ExecutionPhase.EXPANSION,
+    # Filesystem
     "DocumentGenerator": ExecutionPhase.FILESYSTEM,
     "MediaStubService": ExecutionPhase.FILESYSTEM,
+    "OfficeMruService": ExecutionPhase.FILESYSTEM,
+    "PowerShellHistoryService": ExecutionPhase.FILESYSTEM,
+    "CdpLogsService": ExecutionPhase.FILESYSTEM,
     "PrefetchService": ExecutionPhase.FILESYSTEM,
     "ThumbnailCacheService": ExecutionPhase.FILESYSTEM,
     "RecentItemsService": ExecutionPhase.FILESYSTEM,
     "RecycleBinService": ExecutionPhase.FILESYSTEM,
-    # Phase 3: Registry
+    # Registry
     "HiveWriter": ExecutionPhase.REGISTRY,
     "InstalledPrograms": ExecutionPhase.REGISTRY,
     "MruRecentDocs": ExecutionPhase.REGISTRY,
     "NetworkProfiles": ExecutionPhase.REGISTRY,
     "SystemIdentity": ExecutionPhase.REGISTRY,
     "UserAssist": ExecutionPhase.REGISTRY,
-    # Phase 4: Browser
+    # Browser
     "BrowserProfileService": ExecutionPhase.BROWSER,
     "BookmarksService": ExecutionPhase.BROWSER,
     "BrowserHistoryService": ExecutionPhase.BROWSER,
     "CookiesCacheService": ExecutionPhase.BROWSER,
     "BrowserDownloadService": ExecutionPhase.BROWSER,
-    # Phase 5: Applications
+    # Applications
     "DevEnvironment": ExecutionPhase.APPLICATIONS,
     "OfficeArtifacts": ExecutionPhase.APPLICATIONS,
     "EmailClient": ExecutionPhase.APPLICATIONS,
     "CommsApps": ExecutionPhase.APPLICATIONS,
-    # Phase 6: Event logs
+    # Event logs
     "EvtxWriter": ExecutionPhase.EVENTLOG,
     "ApplicationLog": ExecutionPhase.EVENTLOG,
     "SecurityLog": ExecutionPhase.EVENTLOG,
     "SystemLog": ExecutionPhase.EVENTLOG,
     "UpdateArtifacts": ExecutionPhase.EVENTLOG,
-    # Phase 7: Anti-fingerprint
+    # Anti-fingerprint
     "HardwareNormalizer": ExecutionPhase.ANTI_FINGERPRINT,
     "ProcessFaker": ExecutionPhase.ANTI_FINGERPRINT,
     "VmScrubber": ExecutionPhase.ANTI_FINGERPRINT,
+    "MacHygiene": ExecutionPhase.ANTI_FINGERPRINT,
+    # NTFS — requires ntfs-3g FUSE mount; runs after all artifact creation
+    "MftTimestampPatcher": ExecutionPhase.NTFS,
+    "UsnJournalWriter": ExecutionPhase.NTFS,
+    "LogfileWriter": ExecutionPhase.NTFS,
+    # SystemContentPopulator sweeps empty dirs last
+    "SystemContentPopulator": ExecutionPhase.EVALUATION,
 }
 
 
@@ -266,191 +280,111 @@ class Orchestrator:
         self._mount_manager: Optional[MountManager] = None
         self._timestamp_service: Optional[TimestampService] = None
         self._identity_generator: Optional[IdentityGenerator] = None
-        self._profile_engine: Optional[ProfileEngine] = None
 
         # Service registry: name -> (class, instance)
         self._services: Dict[str, tuple] = {}
         self._service_order: List[str] = []
 
-        # Execution context
-        self._context: Dict[str, Any] = {}
-
-    @staticmethod
-    def _normalize_profile_variant(profile_value: Optional[str]) -> Optional[str]:
-        """Normalize profile naming variants to service-compatible values."""
-        if not profile_value:
-            return None
-
-        leaf = profile_value.lower().replace("\\", "/").split("/")[-1]
-        aliases = {
-            "developer": "developer",
-            "developer_user": "developer",
-            "home": "home_user",
-            "home_user": "home_user",
-            "office": "office_user",
-            "office_user": "office_user",
-            "base": "home_user",
-        }
-        return aliases.get(leaf)
-
-    def _resolve_profile_variant(self, profile_name: str, profiles_dir: Path) -> str:
-        """Resolve profile type variant for downstream services.
-
-        Returns one of: ``developer``, ``home_user``, ``office_user``.
-        """
-        explicit = self._normalize_profile_variant(
-            self._config.get("profile_type")
-        )
-        if explicit:
-            return explicit
-
-        from_name = self._normalize_profile_variant(profile_name)
-        if from_name:
-            return from_name
-
-        profile_path = profiles_dir / f"{profile_name}.yaml"
-        if profile_path.is_file():
-            try:
-                payload = yaml.safe_load(profile_path.read_text(encoding="utf-8")) or {}
-                extends_raw = payload.get("extends")
-                if isinstance(extends_raw, str):
-                    from_extends = self._normalize_profile_variant(extends_raw)
-                    if from_extends:
-                        return from_extends
-                elif isinstance(extends_raw, list):
-                    for parent in extends_raw:
-                        if isinstance(parent, str):
-                            from_parent = self._normalize_profile_variant(parent)
-                            if from_parent:
-                                return from_parent
-            except Exception as exc:
-                logger.debug(
-                    "Could not inspect profile extends for %s: %s",
-                    profile_path,
-                    exc,
-                )
-
-        # Fallback heuristic for unknown/custom profile names.
-        return "home_user"
+        # Typed execution context (set during initialize())
+        self._ctx: Optional[ServiceContext] = None
 
     def initialize(self) -> None:
-        """Initialize core dependencies and build context.
-
-        This must be called before run() to set up:
-        - MountManager for filesystem access
-        - TimestampService for artifact timestamps
-        - IdentityGenerator for user/machine identity
-        - ProfileEngine for loading profile configurations
+        """Initialize core dependencies and build the typed ServiceContext.
 
         Raises:
             OrchestrationError: If initialization fails.
         """
         try:
-            # Initialize mount manager
+            # Mount manager
             mount_path = Path(self._config.get("mount_path", "./output"))
             mount_path.mkdir(parents=True, exist_ok=True)
             self._mount_manager = MountManager(str(mount_path))
 
-            # Load profile engine and profile context
-            profiles_dir = Path(self._config.get("profiles_dir", "profiles"))
-            self._profile_engine = ProfileEngine(profiles_dir)
+            # Load PersonaContext from AI-generated YAML
+            raw_path = self._config.get("profile_path")
+            if not raw_path:
+                profiles_dir = Path(self._config.get("profiles_dir", "profiles/generated"))
+                profile_name = self._config.get("profile_name", "")
+                if not profile_name:
+                    raise OrchestrationError(
+                        "No profile_path or profile_name in config. "
+                        "Run arc_wizard.py to generate a persona first."
+                    )
+                raw_path = str(profiles_dir / f"{profile_name}.yaml")
+            try:
+                persona = load_yaml(Path(raw_path))
+            except PersonaLoaderError as exc:
+                raise OrchestrationError(
+                    f"Could not load persona from '{raw_path}': {exc}"
+                ) from exc
 
-            profile_name = self._config.get("profile_name", "base")
-            profile_context = self._profile_engine.load_profile(profile_name)
-            profile_variant = self._resolve_profile_variant(profile_name, profiles_dir)
-
-            # Generate identity
+            # Generate identity bundle
             data_dir = Path(self._config.get("data_dir", "data"))
-            self._identity_generator = IdentityGenerator(profile_context, data_dir)
+            self._identity_generator = IdentityGenerator(persona, data_dir)
             identity_bundle = self._identity_generator.generate(
                 override_username=self._config.get("override_username"),
                 override_hostname=self._config.get("override_hostname"),
             )
 
-            # Initialize timestamp service with seed from identity
             username = identity_bundle.user.username
             computer_name = identity_bundle.user.computer_name
             seed = f"{username}-{computer_name}"
 
+            # Timestamp service
             self._timestamp_service = TimestampService(
                 seed=seed,
-                timeline_days=self._config.get("timeline_days", 90),
+                timeline_days=persona.timeline_days,
                 work_hours={
-                    "start": profile_context.work_hours.start,
-                    "end": profile_context.work_hours.end,
-                    "active_days": list(profile_context.work_hours.active_days),
+                    "start": persona.work_hours_start,
+                    "end": persona.work_hours_end,
+                    "active_days": persona.active_days,
                 },
             )
 
-            # Build execution context
-            profile = {
-                "username": profile_context.username,
-                "organization": profile_context.organization,
-                "locale": profile_context.locale,
-                "profile_name": profile_name,
-                "profile_type": profile_variant,
-                "installed_apps": list(profile_context.installed_apps),
-                "browsing": profile_context.browsing.model_dump(),
-                "work_hours": profile_context.work_hours.model_dump(),
-            }
-            identity = {
-                "username": identity_bundle.user.username,
-                "full_name": identity_bundle.user.full_name,
-                "email": identity_bundle.user.email,
-                "computer_name": identity_bundle.user.computer_name,
-                "organization": identity_bundle.user.organization,
-            }
-
-            # Compute derived timestamps for eventlog/identity services
-            timeline_days = self._config.get("timeline_days", 90)
+            # Derived timestamps
             now = datetime.now(timezone.utc)
-            install_date = now - timedelta(days=timeline_days + 30)
+            install_time = now - timedelta(days=persona.timeline_days + 30)
             boot_time = now - timedelta(hours=2)
-            install_time = install_date
 
-            # Build execution context
-            # identity values (generated username, etc.) take precedence
-            # over profile values (which may contain placeholders like
-            # "default_user").
-            self._context = {
-                **profile,
-                **identity,
-                "config": self._config,
-                "dry_run": self._dry_run,
-                "timeline_days": timeline_days,
-                # Keys required by SystemIdentity, HardwareNormalizer
-                "identity_bundle": identity_bundle,
-                # Keys required by eventlog services
-                "boot_time": boot_time,
-                "install_time": install_time,
-                "install_date": install_date,
-                # Keys required by SecurityLog
-                "domain": identity_bundle.user.computer_name,
-            }
+            # Typed execution context
+            rng = _random_mod.Random(hash(seed))
+            scheduler = EventScheduler(
+                persona=persona,
+                install_time=install_time,
+                now=now,
+                rng=_random_mod.Random(hash(seed + "-scheduler")),
+            )
+            self._ctx = ServiceContext(
+                persona=persona,
+                mount=self._mount_manager,
+                rng=rng,
+                audit=self._audit,
+                timestamp_service=self._timestamp_service,
+                install_time=install_time,
+                boot_time=boot_time,
+                identity_bundle=identity_bundle,
+                scheduler=scheduler,
+            )
 
-            # Create seed registry hive files if the mount target has
-            # no existing hives (e.g. a fresh VHD).
-            # Use the *effective* username from context (profile_context.username
-            # may differ from identity_bundle.user.username).
-            effective_user = self._context.get("username", "default_user")
-            self._create_seed_hives(mount_path, effective_user)
+            # Seed registry hives + system directory skeleton
+            self._create_seed_hives(mount_path, username)
 
             self._audit.log({
                 "operation": "orchestrator_init",
                 "mount_path": str(mount_path),
-                "username": identity.get("username"),
-                "computer_name": identity.get("computer_name"),
-                "profile_type": profile.get("profile_type"),
+                "username": username,
+                "computer_name": computer_name,
+                "profile_archetype": persona.profile_archetype,
                 "dry_run": self._dry_run,
             })
 
             logger.info(
-                "Orchestrator initialized: user=%s, machine=%s, profile=%s",
-                identity.get("username"),
-                identity.get("computer_name"),
-                profile.get("profile_type"),
+                "Orchestrator initialized: user=%s, machine=%s, archetype=%s",
+                username, computer_name, persona.profile_archetype,
             )
 
+        except OrchestrationError:
+            raise
         except Exception as exc:
             logger.error("Failed to initialize orchestrator: %s", exc)
             raise OrchestrationError(f"Initialization failed: {exc}") from exc
@@ -561,8 +495,14 @@ class Orchestrator:
                 "audit_logger": self._audit,
                 "data_dir": Path(self._config.get("data_dir", "data")),
                 "templates_dir": Path(self._config.get("templates_dir", "templates")),
-                "profile_config": self._context,  # passing context in case they ask for profile_config
-                "username": self._context.get("username", "default_user"),
+                "profile_name": (
+                    self._ctx.persona.profile_archetype
+                    if self._ctx else "home_user"
+                ),
+                "username": (
+                    self._ctx.identity_bundle.user.username
+                    if self._ctx else "default_user"
+                ),
             }
 
             # Map already registered services by class name in case another service depends on them
@@ -664,7 +604,7 @@ class Orchestrator:
                 if self._dry_run:
                     logger.debug("[DRY RUN] Would execute: %s", service_name)
                 else:
-                    instance.apply(self._context)
+                    instance.apply(self._ctx)
 
                 service_result.success = True
                 result.services_executed += 1
@@ -722,9 +662,9 @@ class Orchestrator:
                 logger.warning("Failed to unmount: %s", exc)
 
     @property
-    def context(self) -> Dict[str, Any]:
-        """Get the current execution context."""
-        return self._context.copy()
+    def ctx(self) -> Optional[ServiceContext]:
+        """Get the current typed service context."""
+        return self._ctx
 
     @property
     def registered_services(self) -> List[str]:

@@ -191,7 +191,7 @@ class InstalledPrograms(BaseService):
         """Return the unique service name."""
         return "InstalledPrograms"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -201,12 +201,8 @@ class InstalledPrograms(BaseService):
         Raises:
             InstalledProgramsError: If required keys are missing.
         """
-        installed_apps = context.get("installed_apps")
-        if installed_apps is None:
-            raise InstalledProgramsError(
-                "Missing required 'installed_apps' in context"
-            )
-        username = context.get("username", "User")
+        installed_apps = ctx.persona.installed_apps
+        username = ctx.identity_bundle.user.username
         self.write_programs(installed_apps, username)
 
     # -- public API ---------------------------------------------------------

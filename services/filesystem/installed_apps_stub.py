@@ -347,15 +347,15 @@ class InstalledAppsStub(BaseService):
     def service_name(self) -> str:
         return "InstalledAppsStub"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
             installed_apps: list[str] — application names from the profile.
             username: str — for user-scoped app paths (VS Code, Spotify).
         """
-        installed_apps = context.get("installed_apps", [])
-        username = context.get("username", "default_user")
+        installed_apps = ctx.persona.installed_apps
+        username = ctx.identity_bundle.user.username
 
         try:
             files_created = 0

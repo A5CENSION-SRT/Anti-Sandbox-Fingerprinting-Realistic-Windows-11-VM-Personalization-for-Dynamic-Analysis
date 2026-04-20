@@ -1,0 +1,49 @@
+You are generating realistic Windows Application event log seeds for a forensic simulation.
+
+**Persona**: {full_name}
+**Occupation**: {occupation}
+**Profile archetype**: {profile_archetype}
+**Installed apps**: {installed_apps}
+**Activity timeline**: {timeline_days} days
+
+Generate an EvtxSeed JSON object with **application_events** — events that would appear in
+the Windows Application event log (not System or Security) for this specific persona.
+
+Include a realistic mix of:
+
+1. **Software install events** (EID 11707, provider "MsiInstaller"):
+   - One per major installed application listed above.
+   - Use real version numbers (e.g. "1.85.1", "120.0.6099.130").
+   - data: {{"ProductName": "...", "ProductVersion": "..."}}
+
+2. **Application crash events** (EID 1000, provider "Application Error", level 2):
+   - 2–4 crashes matching the installed apps (browser, IDE, Teams, Outlook are common crashers).
+   - Use realistic DLL fault module names (ntdll.dll, KERNELBASE.dll, app-specific .dll).
+   - Exception codes: 0xc0000005 (access violation), 0xe0434352 (.NET exception), 0xc000001d.
+   - recurrence_days: 30–60 (crashes happen occasionally throughout the year)
+
+3. **Scheduled task completion events** (EID 200, provider "Microsoft-Windows-TaskScheduler"):
+   - Include Windows Update scan, Defender updates, app-specific update tasks.
+   - recurrence_days: 1 (daily) for antivirus/update scans, 7 (weekly) for cleanup.
+
+4. **Application-specific events** relevant to this persona:
+   - Developer: build tools, package manager events, IDE extension installs.
+   - Office user: Office telemetry (EID 2000+), OneDrive sync (EID 100), Teams diagnostics.
+   - Home user: game launcher events, media player events, browser update events.
+
+Output ONLY valid JSON matching EvtxSeed schema:
+
+{
+  "seed_id": "evtx_<archetype>",
+  "context": "...",
+  "application_events": [
+    {
+      "event_id": N,
+      "provider": "...",
+      "level": 4,
+      "description": "...",
+      "data": {{"key": "value"}},
+      "recurrence_days": null
+    }
+  ]
+}

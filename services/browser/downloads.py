@@ -66,13 +66,12 @@ class BrowserDownloadService(BaseService):
     def service_name(self) -> str:
         return "BrowserDownloads"
 
-    def apply(self, context: dict) -> None:
-        profile = context.get("profile_type", context.get("profile_name", self._profile))
-        user = context.get("username", self._username)
-        count = context.get("download_count", self._count)
-        timeline_days = context.get("timeline_days", 90)
-        browsers = context.get("browsers", None)
-        wh = context.get("work_hours", {"start": 9, "end": 17})
+    def apply(self, ctx: "ServiceContext") -> None:
+        profile = ctx.persona.profile_archetype
+        user = ctx.identity_bundle.user.username
+        count = self._count
+        timeline_days = ctx.persona.timeline_days
+        wh = {"start": ctx.persona.work_hours_start, "end": ctx.persona.work_hours_end}
 
         catalogue = load_download_catalogue(self._data_dir)
         rng = random.Random(43)          # different seed from visits
@@ -95,8 +94,6 @@ class BrowserDownloadService(BaseService):
 
         # 2. SQLite records in each browser's History DB
         for browser_name, ud_rel in BROWSERS:
-            if browsers and browser_name not in browsers:
-                continue
             pf = os.path.join("Users", user, ud_rel, "Default")
             db_path = self._mount.resolve(pf) / "History"
             if not db_path.exists():

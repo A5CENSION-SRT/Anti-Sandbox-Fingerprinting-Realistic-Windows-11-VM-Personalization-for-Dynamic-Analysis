@@ -101,12 +101,14 @@ _SOFTWARE_HIVE: str = "Windows/System32/config/SOFTWARE"
 # ---------------------------------------------------------------------------
 
 _VM_SERVICE_KEYS: List[str] = [
+    # VirtualBox
     r"ControlSet001\Services\VBoxSF",
     r"ControlSet001\Services\VBoxGuest",
     r"ControlSet001\Services\VBoxMouse",
     r"ControlSet001\Services\VBoxVideo",
     r"ControlSet001\Services\VBoxNetFlt",
     r"ControlSet001\Services\VBoxNetAdp",
+    # VMware
     r"ControlSet001\Services\vmci",
     r"ControlSet001\Services\vmhgfs",
     r"ControlSet001\Services\vmmouse",
@@ -114,8 +116,19 @@ _VM_SERVICE_KEYS: List[str] = [
     r"ControlSet001\Services\vmusbmouse",
     r"ControlSet001\Services\vmxnet",
     r"ControlSet001\Services\vmxnet3ndis6",
+    r"ControlSet001\Services\vmtools",
+    # Hyper-V
     r"ControlSet001\Services\hv_vmbus",
     r"ControlSet001\Services\hvservice",
+    # QEMU / KVM / VirtIO (Phase 7)
+    r"ControlSet001\Services\vioscsi",
+    r"ControlSet001\Services\viostor",
+    r"ControlSet001\Services\viomem",
+    r"ControlSet001\Services\vioser",
+    r"ControlSet001\Services\vioball",
+    r"ControlSet001\Services\qemu-ga",
+    r"ControlSet001\Services\kvm",
+    r"ControlSet001\Services\kbdclass",
 ]
 
 # ---------------------------------------------------------------------------
@@ -127,6 +140,10 @@ _VM_SOFTWARE_KEYS: List[str] = [
     r"VMware, Inc.",
     r"Oracle\VirtualBox Guest Additions",
     r"Microsoft\Virtual Machine\Guest\Parameters",
+    # Uninstall entries for VM tools (Phase 7)
+    r"Microsoft\Windows\CurrentVersion\Uninstall\Oracle VM VirtualBox Guest Additions",
+    r"Microsoft\Windows\CurrentVersion\Uninstall\VMware Tools",
+    r"Microsoft\Windows\CurrentVersion\Uninstall\QEMU Guest Agent",
 ]
 
 # ---------------------------------------------------------------------------
@@ -197,7 +214,7 @@ class VmScrubber(BaseService):
         """Return the unique service name."""
         return "VmScrubber"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -206,11 +223,7 @@ class VmScrubber(BaseService):
         Raises:
             VmScrubberError: On missing context keys or write failure.
         """
-        computer_name = context.get("computer_name")
-        if not computer_name:
-            raise VmScrubberError(
-                "Missing required 'computer_name' in context"
-            )
+        computer_name = ctx.identity_bundle.user.computer_name
         self.scrub(computer_name)
 
     # -- public API ---------------------------------------------------------

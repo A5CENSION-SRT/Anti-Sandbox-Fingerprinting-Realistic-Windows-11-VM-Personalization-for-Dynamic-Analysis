@@ -19,7 +19,7 @@ from typing import Any, Dict, List
 from faker import Faker
 from pydantic import BaseModel
 
-from core.profile_engine import ProfileContext
+from core.persona_context import PersonaContext
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,12 @@ _HOME_CATEGORIES: frozenset[str] = frozenset({
 })
 
 _VM_STRINGS: frozenset[str] = frozenset({
+    # Common VM/hypervisor indicators
     "vbox", "vmware", "virtual", "test-pc", "sandbox", "hyperv",
+    # QEMU / KVM / VirtIO (Phase 7)
+    "qemu", "kvm", "qemuga", "vioscsi", "viostor", "viomem",
+    # Xen / Parallels / Bochs
+    "xen", "parallels", "bochs",
 })
 
 _ORG_SUFFIXES: List[str] = [
@@ -117,7 +122,7 @@ class IdentityGenerator:
 
     _HW_DATA_FILE: str = "hardware_models.json"
 
-    def __init__(self, profile_context: ProfileContext, data_dir: Path) -> None:
+    def __init__(self, profile_context: PersonaContext, data_dir: Path) -> None:
         if not data_dir.is_dir():
             raise FileNotFoundError(f"Data directory not found: {data_dir}")
         self._profile = profile_context
@@ -310,7 +315,7 @@ class IdentityGenerator:
         if apps & _DEVELOPER_APPS:
             return "developer"
         categories = frozenset(
-            c.lower() for c in self._profile.browsing.categories
+            c.lower() for c in self._profile.browsing_categories
         )
         if (
             self._profile.organization.lower() == "personal"

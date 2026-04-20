@@ -211,27 +211,45 @@ class UserAssist(BaseService):
         """Return the unique service name."""
         return "UserAssist"
 
-    def apply(self, context: dict) -> None:
-        """Execute from orchestrator context.
+    def apply(self, ctx: "ServiceContext") -> None:
+        """Execute from orchestrator context."""
+        profile_type = ctx.persona.profile_archetype
+        username = ctx.identity_bundle.user.username
 
-        Expects context keys:
-            profile_type: str — one of "home", "office", "developer".
-            username: str — the profile username.
+        expansion = getattr(ctx, "expansion", None)
+        registry_seed = getattr(expansion, "registry", None) if expansion is not None else None
 
-        Raises:
-            UserAssistError: If required keys are missing.
-        """
-        profile_type = context.get("profile_type")
-        if profile_type is None:
-            raise UserAssistError(
-                "Missing required 'profile_type' in context"
+        if registry_seed is not None and registry_seed.userassist_apps:
+            programs = [
+                {
+                    "path": a.exe_path,
+                    "run_count": a.run_count,
+                    "focus_count": a.focus_count or max(1, int(a.run_count * 2.5)),
+                    "focus_time_ms": a.focus_time_ms or int(a.run_count * 300_000),
+                    "guid": _GUID_EXE,
+                }
+                for a in registry_seed.userassist_apps
+            ]
+            operations = self.build_operations(programs, username)
+            try:
+                self._hive_writer.execute_operations(operations)
+            except HiveWriterError as exc:
+                raise UserAssistError(f"Failed to write UserAssist entries: {exc}") from exc
+            self._audit_logger.log({
+                "service": self.service_name,
+                "operation": "write_userassist_complete",
+                "source": "seed",
+                "profile_type": profile_type,
+                "username": username,
+                "programs_count": len(programs),
+                "operations_count": len(operations),
+            })
+            logger.info(
+                "Written %d UserAssist entries from seed for '%s'",
+                len(programs), username,
             )
-        username = context.get("username")
-        if username is None:
-            raise UserAssistError(
-                "Missing required 'username' in context"
-            )
-        self.write_userassist(profile_type, username)
+        else:
+            self.write_userassist(profile_type, username)
 
     # -- public API ---------------------------------------------------------
 

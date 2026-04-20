@@ -46,27 +46,28 @@ class BrowserHistoryService(BaseService):
     def service_name(self) -> str:
         return "BrowserHistory"
 
-    def apply(self, context: dict) -> None:
-        user = context.get("username", self._username)
-        days = context.get("timeline_days", 90)
-        browsers = context.get("browsers", None)
+    def apply(self, ctx: "ServiceContext") -> None:
+        user = ctx.identity_bundle.user.username
+        days = ctx.persona.timeline_days
+        cats = ctx.persona.browsing_categories
+        daily = ctx.persona.daily_avg_sites
+        hs = ctx.persona.work_hours_start
+        he = ctx.persona.work_hours_end
+        active = ctx.persona.active_days
 
         for name, ud_rel in BROWSERS:
-            if browsers and name not in browsers:
-                continue
             pf = os.path.join("Users", user, ud_rel, "Default")
-            self._build_db(name, pf, context, days)
+            self._build_db(name, pf, days, cats, daily, hs, he, active)
 
     # ------------------------------------------------------------------
 
     def _build_db(self, browser: str, pf_path: str,
-                  context: dict, days: int) -> None:
+                  days: int, cats: list, daily: int,
+                  hs: int, he: int, active: list) -> None:
         db_dir = self._mount.resolve(pf_path)
         db_dir.mkdir(parents=True, exist_ok=True)
         db_path = db_dir / "History"
 
-        browsing = context.get("browsing", {})
-        cats = browsing.get("categories", ["general"])
         entries = self._loader.urls_for_categories(cats)
 
         conn = sqlite3.connect(str(db_path))
@@ -79,9 +80,10 @@ class BrowserHistoryService(BaseService):
                 "INSERT OR REPLACE INTO meta VALUES (?,?)",
                 ("last_compatible_version", LAST_COMPATIBLE_VERSION))
 
-            rng = random.Random(42)
+            seed = hash(browser + pf_path)
+            rng = random.Random(seed)
             url_id_map = self._insert_urls(conn, entries, rng)
-            self._insert_visits(conn, entries, url_id_map, context, days, rng)
+            self._insert_visits(conn, entries, url_id_map, days, daily, hs, he, active, rng)
             self._backfill_last_visit_times(conn, days, rng)
             populate_search_terms(
                 conn, url_id_map, self._loader.load_search_terms(), rng)
@@ -109,11 +111,7 @@ class BrowserHistoryService(BaseService):
             id_map[url] = cur.lastrowid
         return id_map
 
-    def _insert_visits(self, conn, entries, id_map, context, days, rng):
-        daily = context.get("browsing", {}).get("daily_avg_sites", 10)
-        wh = context.get("work_hours", {})
-        hs, he = wh.get("start", 9), wh.get("end", 17)
-        active = wh.get("active_days", [1, 2, 3, 4, 5])
+    def _insert_visits(self, conn, entries, id_map, days, daily, hs, he, active, rng):
 
         now = datetime.now(timezone.utc)
         start = now - timedelta(days=days)

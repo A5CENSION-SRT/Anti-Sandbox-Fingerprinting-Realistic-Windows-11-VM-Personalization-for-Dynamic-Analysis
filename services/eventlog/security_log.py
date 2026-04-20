@@ -30,7 +30,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from random import Random
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from services.base_service import BaseService
 from services.eventlog.evtx_writer import EvtxRecord, EvtxWriter, EvtxWriterError
@@ -109,63 +109,53 @@ class SecurityLog(BaseService):
         """Return the unique service name."""
         return "SecurityLog"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
-        Expects context keys:
-            profile_type:  str — ``"home"``, ``"office"``, or ``"developer"``.
-            username:      str — Windows username (e.g. ``"jane.doe"``).
-            computer_name: str — VM computer name.
-            domain:        str — domain name or computer name for local accounts.
-            boot_time:     datetime — UTC boot timestamp.
-
-        Raises:
-            SecurityLogError: On missing context keys or write failure.
-        """
-        for key in ("profile_type", "username", "computer_name", "boot_time"):
-            if not context.get(key):
-                raise SecurityLogError(
-                    f"Missing required '{key}' in context"
-                )
-        self.write_security_log(
-            profile_type=context["profile_type"],
-            username=context["username"],
-            computer_name=context["computer_name"],
-            domain=context.get("domain", context["computer_name"]),
-            boot_time=context["boot_time"],
-        )
-
-    # -- public API ---------------------------------------------------------
-
-    def write_security_log(
-        self,
-        profile_type: str,
-        username: str,
-        computer_name: str,
-        domain: str,
-        boot_time: datetime,
-    ) -> None:
-        """Build and write the Security.evtx file.
-
-        Args:
-            profile_type:  One of ``"home"``, ``"office"``, ``"developer"``.
-            username:      Windows username.
-            computer_name: VM computer name.
-            domain:        Domain or workgroup name.
-            boot_time:     UTC datetime of the simulated boot.
+        Drives record generation from the EventScheduler LOGIN/LOGOFF events
+        so each day in the timeline produces a full logon→activity→logoff
+        sequence.  Falls back to a single session when no scheduler is present.
 
         Raises:
             SecurityLogError: On write failure.
         """
-        records = self.build_records(
-            profile_type, username, computer_name, domain, boot_time
-        )
+        profile_type = ctx.persona.profile_archetype
+        username = ctx.identity_bundle.user.username
+        computer_name = ctx.identity_bundle.user.computer_name
+        domain = computer_name
+
+        if ctx.scheduler is not None:
+            login_events = ctx.scheduler.events_of("LOGIN")
+            logoff_events = ctx.scheduler.events_of("LOGOFF")
+            logoff_map: dict = {}
+            for ev in logoff_events:
+                logoff_map.setdefault(ev.timestamp.date(), []).append(ev.timestamp)
+
+            all_records: List[EvtxRecord] = []
+            all_records.append(self._make_startup(computer_name, ctx.boot_time))
+            all_records.append(self._make_audit_policy(computer_name, ctx.boot_time))
+
+            for login_ev in login_events:
+                boot_ts = login_ev.timestamp
+                day_key = boot_ts.date()
+                logoff_list = logoff_map.get(day_key, [])
+                logoff_ts = logoff_list[0] if logoff_list else None
+                all_records.extend(
+                    self.build_records(
+                        profile_type, username, computer_name, domain,
+                        boot_ts, logoff_ts,
+                    )
+                )
+        else:
+            all_records = self.build_records(
+                profile_type, username, computer_name, domain,
+                ctx.boot_time, None,
+            )
+
         try:
-            self._evtx_writer.write_records(records, _SECURITY_EVTX)
+            self._evtx_writer.write_records(all_records, _SECURITY_EVTX)
         except EvtxWriterError as exc:
-            raise SecurityLogError(
-                f"Failed to write Security event log: {exc}"
-            ) from exc
+            raise SecurityLogError(f"Failed to write Security event log: {exc}") from exc
 
         self._audit_logger.log({
             "service": self.service_name,
@@ -173,12 +163,14 @@ class SecurityLog(BaseService):
             "profile_type": profile_type,
             "username": username,
             "computer_name": computer_name,
-            "record_count": len(records),
+            "record_count": len(all_records),
         })
         logger.info(
             "Security log written: %d records for %s@%s (%s)",
-            len(records), username, computer_name, profile_type,
+            len(all_records), username, computer_name, profile_type,
         )
+
+    # -- public API ---------------------------------------------------------
 
     def build_records(
         self,
@@ -187,17 +179,20 @@ class SecurityLog(BaseService):
         computer_name: str,
         domain: str,
         boot_time: datetime,
+        logoff_time: "Optional[datetime]" = None,
     ) -> List[EvtxRecord]:
-        """Build all Security log records without writing.
+        """Build Security log records for one logon→activity→logoff cycle.
 
-        Pure function — suitable for isolated testing.
+        Pure function — suitable for isolated testing or direct calls.
 
         Args:
             profile_type:  Profile type string.
             username:      Windows username.
             computer_name: VM computer name.
             domain:        Domain or workgroup name.
-            boot_time:     UTC boot timestamp.
+            boot_time:     UTC logon timestamp.
+            logoff_time:   UTC logoff timestamp.  If ``None`` a random
+                           session length is used.
 
         Returns:
             Ordered list of :class:`EvtxRecord`.
@@ -205,57 +200,63 @@ class SecurityLog(BaseService):
         if boot_time.tzinfo is None:
             boot_time = boot_time.replace(tzinfo=timezone.utc)
 
-        rng = Random(hash(computer_name + username + profile_type))
+        day_seed = int(boot_time.timestamp()) & 0xFFFFFFFF
+        rng = Random(hash(computer_name + username + profile_type) ^ day_seed)
         records: List[EvtxRecord] = []
         cursor = boot_time
 
-        # 1. Windows startup event
-        records.append(self._make_startup(computer_name, cursor))
-        cursor += timedelta(seconds=rng.randint(2, 5))
+        # Primary interactive logon
+        logon_id = rng.randint(0x10000, 0xFFFFFF)
+        records.append(
+            self._make_logon(computer_name, username, domain, logon_id, 2, cursor)
+        )
+        cursor += timedelta(milliseconds=rng.randint(50, 400))
+        records.append(
+            self._make_special_privs(computer_name, username, domain, logon_id, cursor)
+        )
+        cursor += timedelta(seconds=rng.randint(1, 5))
 
-        # 2. Audit policy change at boot
-        records.append(self._make_audit_policy(computer_name, cursor))
-        cursor += timedelta(seconds=rng.randint(1, 3))
+        # Explicit-credential events during the session (scheduled tasks, runas)
+        explicit_count = rng.randint(1, 4)
+        session_len = (
+            int((logoff_time - boot_time).total_seconds())
+            if logoff_time
+            else rng.randint(3600, 36000)
+        )
+        for _ in range(explicit_count):
+            event_ts = boot_time + timedelta(seconds=rng.randint(300, max(301, session_len - 60)))
+            records.append(self._make_explicit_creds(computer_name, username, domain, event_ts))
 
-        # 3. Logon sessions
-        session_count = _PROFILE_LOGON_SESSIONS.get(profile_type, 3)
-        for i in range(session_count):
-            logon_id = rng.randint(0x10000, 0xFFFFFF)
-            logon_type = rng.choice([2, 2, 7, 11] if i > 0 else [2])
+        # Kerberos tickets (office/developer profiles)
+        if profile_type in ("office", "developer"):
+            kerberos_count = rng.randint(2, 6)
+            for _ in range(kerberos_count):
+                event_ts = boot_time + timedelta(
+                    seconds=rng.randint(60, max(61, session_len - 60))
+                )
+                records.append(
+                    self._make_kerberos_svc(computer_name, username, domain, event_ts)
+                )
 
-            logon_ts = cursor + timedelta(
-                minutes=rng.randint(5, 90) if i > 0 else 0
+        # SYSTEM account background logons (services, scheduled tasks)
+        system_logon_count = rng.randint(2, 5)
+        for _ in range(system_logon_count):
+            event_ts = boot_time + timedelta(
+                seconds=rng.randint(60, max(61, session_len - 60))
             )
-            cursor = logon_ts
-
+            sys_id = rng.randint(0x3E6, 0x3E7)
             records.append(
                 self._make_logon(
-                    computer_name, username, domain,
-                    logon_id, logon_type, cursor,
+                    computer_name, "SYSTEM", "NT AUTHORITY",
+                    sys_id, 5, event_ts,
                 )
             )
-            cursor += timedelta(milliseconds=rng.randint(50, 400))
 
-            records.append(
-                self._make_special_privs(
-                    computer_name, username, domain, logon_id, cursor
-                )
-            )
-            cursor += timedelta(
-                minutes=rng.randint(30, 180),
-                seconds=rng.randint(0, 59),
-            )
-
-            records.append(
-                self._make_logoff(computer_name, username, domain, logon_id, cursor)
-            )
-            cursor += timedelta(seconds=rng.randint(1, 10))
-
-        # 4. Kerberos service ticket (office/developer profiles only)
-        if profile_type in ("office", "developer"):
-            records.append(
-                self._make_kerberos_svc(computer_name, username, domain, cursor)
-            )
+        # Logoff
+        logoff_ts = logoff_time or (boot_time + timedelta(seconds=session_len))
+        records.append(
+            self._make_logoff(computer_name, username, domain, logon_id, logoff_ts)
+        )
 
         return records
 
@@ -389,6 +390,38 @@ class SecurityLog(BaseService):
             },
             keywords=_KW_AUDIT_SUCCESS,
             task=12548,
+            opcode=0,
+        )
+
+    def _make_explicit_creds(
+        self,
+        computer: str,
+        username: str,
+        domain: str,
+        ts: datetime,
+    ) -> EvtxRecord:
+        """EID 4648 — A logon was attempted using explicit credentials."""
+        return EvtxRecord(
+            channel=_CHANNEL,
+            event_id=_EID_EXPLICIT_CREDS,
+            level=4,
+            provider=_PROVIDER,
+            computer=computer,
+            timestamp=ts,
+            event_data={
+                "SubjectUserSid": f"S-1-5-21-{abs(hash(username)) % 2**31}-1001",
+                "SubjectUserName": username,
+                "SubjectDomainName": domain,
+                "SubjectLogonId": hex(0x3E7),
+                "LogonGuid": "{00000000-0000-0000-0000-000000000000}",
+                "TargetUserName": username,
+                "TargetDomainName": domain,
+                "TargetLogonGuid": "{00000000-0000-0000-0000-000000000000}",
+                "ProcessId": hex(4),
+                "ProcessName": r"C:\Windows\System32\svchost.exe",
+            },
+            keywords=_KW_AUDIT_SUCCESS,
+            task=12544,
             opcode=0,
         )
 

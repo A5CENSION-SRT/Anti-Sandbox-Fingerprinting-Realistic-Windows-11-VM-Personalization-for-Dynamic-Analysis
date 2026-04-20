@@ -10,19 +10,8 @@ from __future__ import annotations
 
 import logging
 import os
-import platform
 from pathlib import Path
 from typing import Optional
-
-# Windows file-time APIs — available only on Windows via pywin32
-try:
-    import pywintypes
-    import win32con
-    import win32file
-
-    _HAS_WIN32 = True
-except ImportError:
-    _HAS_WIN32 = False
 
 logger = logging.getLogger(__name__)
 
@@ -138,24 +127,3 @@ class FileWriter:
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))
 
-        # Creation time requires pywin32 on Windows
-        if _HAS_WIN32 and platform.system() == "Windows":
-            try:
-                created = pywintypes.Time(timestamps["created"])
-                handle = win32file.CreateFile(
-                    str(path),
-                    win32con.GENERIC_WRITE,
-                    win32con.FILE_SHARE_WRITE,
-                    None,
-                    win32con.OPEN_EXISTING,
-                    win32con.FILE_ATTRIBUTE_NORMAL,
-                    None,
-                )
-                try:
-                    win32file.SetFileTime(handle, created, None, None)
-                finally:
-                    handle.Close()
-            except Exception as exc:
-                logger.debug(
-                    "Could not set creation time for %s: %s", path, exc
-                )

@@ -10,8 +10,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from core.persona_context import PersonaContext
 from services.ai.gemini_client import GeminiClient, GeminiClientError
-from services.ai.schemas import PersonaContext
 
 logger = logging.getLogger(__name__)
 
@@ -169,109 +169,3 @@ Output valid JSON matching PersonaContext schema."""
         return personas
 
 
-# ---------------------------------------------------------------------------
-# Fallback Persona (when API unavailable)
-# ---------------------------------------------------------------------------
-
-def create_fallback_persona(
-    occupation: str = "Office Worker",
-    profile_type: str = "office_user",
-) -> PersonaContext:
-    """Create a minimal fallback persona when Gemini API is unavailable.
-    
-    Uses hardcoded values that align with existing static profiles.
-    
-    Args:
-        occupation: Job title
-        profile_type: One of home_user, office_user, developer
-    
-    Returns:
-        Basic PersonaContext instance.
-    """
-    from services.ai.schemas import PersonaInterests, PersonaWorkStyle, TechProficiency
-    
-    # Profile-specific defaults
-    defaults = {
-        "home_user": {
-            "full_name": "Alex Johnson",
-            "organization": "Personal",
-            "occupation": "Homeowner",
-            "tech_proficiency": TechProficiency.INTERMEDIATE,
-            "hobbies": ["cooking", "gardening", "reading", "hiking", "photography"],
-            "professional_topics": ["home improvement", "personal finance"],
-            "entertainment": ["streaming shows", "podcasts", "casual games"],
-            "tools": ["web browser", "email", "social media"],
-            "projects": ["Home Renovation", "Garden Project", "Photo Organization"],
-            "work_hours": (18, 23),
-            "active_days": [6, 7],
-        },
-        "office_user": {
-            "full_name": "Sarah Mitchell",
-            "organization": "Acme Corporation",
-            "occupation": occupation or "Marketing Manager",
-            "tech_proficiency": TechProficiency.INTERMEDIATE,
-            "hobbies": ["yoga", "travel", "wine tasting", "networking"],
-            "professional_topics": ["marketing trends", "leadership", "analytics"],
-            "entertainment": ["business podcasts", "documentaries"],
-            "tools": ["Microsoft Office", "Slack", "Salesforce", "Zoom"],
-            "projects": ["Q4 Campaign", "Brand Refresh", "Customer Survey", "Website Redesign"],
-            "work_hours": (9, 17),
-            "active_days": [1, 2, 3, 4, 5],
-        },
-        "developer": {
-            "full_name": "Jordan Chen",
-            "organization": "TechStart Inc.",
-            "occupation": occupation or "Senior Software Engineer",
-            "tech_proficiency": TechProficiency.HIGH,
-            "hobbies": ["open source", "gaming", "3D printing", "home automation"],
-            "professional_topics": ["cloud architecture", "machine learning", "devops"],
-            "entertainment": ["tech podcasts", "sci-fi", "strategy games"],
-            "tools": ["VS Code", "Docker", "Git", "Terminal", "Postman"],
-            "projects": ["API Gateway", "Auth Service", "Data Pipeline", "Mobile App"],
-            "work_hours": (10, 19),
-            "active_days": [1, 2, 3, 4, 5],
-        },
-    }
-    
-    cfg = defaults.get(profile_type, defaults["office_user"])
-    
-    # Derive username from name
-    name_parts = cfg["full_name"].lower().split()
-    username = f"{name_parts[0]}.{name_parts[-1]}" if len(name_parts) >= 2 else name_parts[0]
-    
-    # Derive email domain from org
-    org_clean = cfg["organization"].lower().replace(" ", "").replace(".", "")
-    domain = f"{org_clean[:12]}.com" if cfg["organization"] != "Personal" else "gmail.com"
-    
-    return PersonaContext(
-        full_name=cfg["full_name"],
-        username=username,
-        email=f"{username}@{domain}",
-        organization=cfg["organization"],
-        occupation=cfg["occupation"],
-        department=None,
-        age_range="28-42",
-        locale="en_US",
-        location="United States",
-        tech_proficiency=cfg["tech_proficiency"],
-        interests=PersonaInterests(
-            hobbies=cfg["hobbies"],
-            professional_topics=cfg["professional_topics"],
-            entertainment=cfg["entertainment"],
-        ),
-        work_style=PersonaWorkStyle(
-            description="Balanced work style with regular hours",
-            typical_tools=cfg["tools"],
-            collaboration_style="hybrid",
-            meeting_frequency="moderate",
-        ),
-        project_names=cfg["projects"] + ["General Tasks", "Admin", "Planning"],
-        colleague_names=[
-            "John Smith", "Emily Davis", "Michael Brown", "Jessica Wilson",
-            "David Lee", "Amanda Garcia", "Chris Martinez", "Rachel Taylor",
-            "Kevin Anderson", "Lisa Thomas",
-        ],
-        work_hours_start=cfg["work_hours"][0],
-        work_hours_end=cfg["work_hours"][1],
-        active_days=cfg["active_days"],
-    )

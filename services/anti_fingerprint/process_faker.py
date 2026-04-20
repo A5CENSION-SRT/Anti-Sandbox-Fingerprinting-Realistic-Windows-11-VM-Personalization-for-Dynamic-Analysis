@@ -192,7 +192,7 @@ class ProcessFaker(BaseService):
         """Return the unique service name."""
         return "ProcessFaker"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -203,16 +203,8 @@ class ProcessFaker(BaseService):
         Raises:
             ProcessFakerError: On missing context keys or write failure.
         """
-        profile_type = context.get("profile_type")
-        if not profile_type:
-            raise ProcessFakerError(
-                "Missing required 'profile_type' in context"
-            )
-        username = context.get("username")
-        if not username:
-            raise ProcessFakerError(
-                "Missing required 'username' in context"
-            )
+        profile_type = ctx.persona.profile_archetype
+        username = ctx.identity_bundle.user.username
         self.fake_processes(profile_type, username)
 
     # -- public API ---------------------------------------------------------

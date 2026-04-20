@@ -1,0 +1,238 @@
+<!--
+  ARC libvirt Domain Template — SMBIOS/MAC/Disk-Serial Spoofing
+  ==============================================================
+  Reference: MASTER_PLAN §8.2, ADR-011
+
+  PURPOSE:
+    This domain XML spoofs the hypervisor-level hardware identifiers so that
+    Windows Device Manager, WMI, and detection tools see a Dell OptiPlex 7090
+    rather than QEMU/KVM.  ARC handles the in-guest registry side (Phase 7);
+    this template handles the host side.
+
+  USAGE:
+    1. Copy this file: cp libvirt-profile-template.xml ~/vms/run-042.xml
+    2. Edit the <name>, <uuid>, disk <source file=>, and MAC address.
+    3. Define and start:
+         virsh define ~/vms/run-042.xml
+         virsh start arc-run-042
+    4. When done: virsh destroy arc-run-042 && virsh undefine arc-run-042
+
+  BEFORE EACH RUN:
+    - Generate a new UUID:  uuidgen
+    - Generate a new MAC:   printf '00:1b:21:%02x:%02x:%02x\n' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256))
+    - Point <source file=> at a COPY of the baseline VHDX, not the baseline itself.
+
+  ANTI-DETECTION NOTES:
+    - cpu mode="host-passthrough" exposes real host CPU flags (no CPUID hypervisor leaf).
+    - <hyperv><hidden state="on"/> tells KVM to hide the hypervisor CPUID bit.
+    - e1000e NIC: Intel OUI 00:1b:21 — NOT QEMU 52:54:00, VBox 08:00:27, VMware 00:0c:29.
+    - smbios Dell OptiPlex 7090 strings match what ARC writes into the registry.
+    - disk serial matches what ARC uses as the RNG seed for determinism (ADR-012).
+-->
+<domain type="kvm">
+
+  <!-- ============================================================
+       Identity
+       ============================================================ -->
+  <name>arc-run-CHANGEME</name>
+  <!-- Replace with: uuidgen -->
+  <uuid>00000000-0000-0000-0000-000000000001</uuid>
+  <title>ARC Analyst Run — CHANGEME</title>
+
+  <!-- ============================================================
+       Resources
+       ============================================================ -->
+  <memory unit="MiB">8192</memory>
+  <currentMemory unit="MiB">8192</currentMemory>
+  <vcpu placement="static">4</vcpu>
+
+  <!-- ============================================================
+       SMBIOS spoofing — Dell OptiPlex 7090
+       Values here must match what hardware_normalizer.py writes.
+       ============================================================ -->
+  <sysinfo type="smbios">
+    <!-- Type 0: BIOS -->
+    <bios>
+      <entry name="vendor">Dell Inc.</entry>
+      <entry name="version">2.15.0</entry>
+      <entry name="date">12/14/2023</entry>
+    </bios>
+    <!-- Type 1: System -->
+    <system>
+      <entry name="manufacturer">Dell Inc.</entry>
+      <entry name="product">OptiPlex 7090</entry>
+      <entry name="version">Not Specified</entry>
+      <!-- Replace serial below; it becomes ctx.identity_bundle.hardware.disk_serial -->
+      <entry name="serial">S5GYNX0N712345Y</entry>
+      <!-- Replace uuid with the same UUID as the <uuid> field above -->
+      <entry name="uuid">00000000-0000-0000-0000-000000000001</entry>
+      <entry name="sku">OptiPlex 7090</entry>
+      <entry name="family">OptiPlex</entry>
+    </system>
+    <!-- Type 2: Baseboard -->
+    <baseBoard>
+      <entry name="manufacturer">Dell Inc.</entry>
+      <entry name="product">0GN6JF</entry>
+      <entry name="version">A00</entry>
+      <entry name="serial">BVMF203</entry>
+      <entry name="asset">Not Specified</entry>
+      <entry name="location">Default string</entry>
+    </baseBoard>
+    <!-- Type 3: Chassis -->
+    <chassis>
+      <entry name="manufacturer">Dell Inc.</entry>
+      <entry name="version">Not Specified</entry>
+      <entry name="serial">S5GYNX0N712345Y</entry>
+      <entry name="asset">Not Specified</entry>
+    </chassis>
+    <!-- Type 4: Processor (optional; if not set, KVM exposes real CPU) -->
+    <processor>
+      <entry name="sock_dest">CPU 1</entry>
+      <entry name="manufacturer">Intel(R) Corporation</entry>
+    </processor>
+  </sysinfo>
+
+  <!-- ============================================================
+       OS / Firmware — UEFI + Secure Boot
+       ============================================================ -->
+  <os firmware="efi">
+    <type arch="x86_64" machine="q35">hvm</type>
+    <firmware>
+      <feature enabled="yes" name="enrolled-keys"/>
+      <feature enabled="yes" name="secure-boot"/>
+    </firmware>
+    <!-- Pass SMBIOS data to guest -->
+    <smbios mode="sysinfo"/>
+    <boot dev="hd"/>
+  </os>
+
+  <!-- ============================================================
+       CPU — host passthrough hides hypervisor CPUID leaf
+       ============================================================ -->
+  <cpu mode="host-passthrough" check="none" migratable="off">
+    <topology sockets="1" dies="1" cores="4" threads="2"/>
+    <!-- Hide the hypervisor CPUID bit (pafish check T1497.001) -->
+    <feature policy="disable" name="hypervisor"/>
+  </cpu>
+
+  <!-- ============================================================
+       Features
+       ============================================================ -->
+  <features>
+    <acpi/>
+    <apic/>
+    <hyperv mode="passthrough">
+      <!-- hiding the Hyper-V vendor leaf stops CPUID-based detection -->
+      <hidden state="on"/>
+      <relaxed state="on"/>
+      <vapic state="on"/>
+      <spinlocks state="on" retries="8191"/>
+    </hyperv>
+    <kvm>
+      <hidden state="on"/>
+    </kvm>
+    <smm state="on"/>
+  </features>
+
+  <!-- ============================================================
+       Clock
+       ============================================================ -->
+  <clock offset="localtime">
+    <timer name="rtc" tickpolicy="catchup"/>
+    <timer name="pit" tickpolicy="delay"/>
+    <timer name="hpet" present="yes"/>
+    <timer name="hypervclock" present="yes"/>
+  </clock>
+
+  <!-- ============================================================
+       Power management
+       ============================================================ -->
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+
+  <pm>
+    <suspend-to-mem enabled="no"/>
+    <suspend-to-disk enabled="no"/>
+  </pm>
+
+  <!-- ============================================================
+       Devices
+       ============================================================ -->
+  <devices>
+
+    <!-- Emulator -->
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <!-- PRIMARY DISK — SATA (not virtio, to avoid driver tells)
+         serial= is used by ARC as the hardware identity seed.
+         Change to match the persona's disk serial.
+         Point source file= at the run-specific copy of the VHDX. -->
+    <disk type="file" device="disk">
+      <driver name="qemu" type="vhdx" cache="writeback" io="threads"/>
+      <source file="/home/analyst/vms/run-CHANGEME.vhdx"/>
+      <target dev="sda" bus="sata"/>
+      <serial>S5GYNX0N712345Y</serial>
+      <address type="drive" controller="0" bus="0" target="0" unit="0"/>
+    </disk>
+
+    <!-- SATA controller — matches a real Dell OptiPlex (AHCI) -->
+    <controller type="sata" index="0">
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x1f" function="0x2"/>
+    </controller>
+
+    <!-- NIC — Intel e1000e with non-VM OUI (Intel 00:1b:21)
+         Replace the last 3 octets for each run:
+           printf '%02x:%02x:%02x' $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256))
+         NEVER use:
+           52:54:00 (QEMU default — detected by all sandboxes)
+           08:00:27 (VirtualBox)
+           00:0c:29 / 00:50:56 (VMware)  -->
+    <interface type="network">
+      <source network="default"/>
+      <model type="e1000e"/>
+      <!-- CHANGE THIS for each run -->
+      <mac address="00:1b:21:a4:b5:c6"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x03" function="0x0"/>
+    </interface>
+
+    <!-- Input devices -->
+    <input type="tablet" bus="usb"/>
+    <input type="keyboard" bus="ps2"/>
+
+    <!-- Graphics — SPICE for local analysis; change to VNC if remote -->
+    <graphics type="spice" autoport="yes" listen="127.0.0.1">
+      <listen type="address" address="127.0.0.1"/>
+      <image compression="off"/>
+    </graphics>
+    <video>
+      <!-- QXL works with SPICE; use vga if using VNC -->
+      <model type="qxl" ram="65536" vram="65536" vgamem="16384" heads="1"/>
+    </video>
+
+    <!-- SPICE agent channel (clipboard, file transfer) -->
+    <channel type="spicevmc">
+      <target type="virtio" name="com.redhat.spice.0"/>
+    </channel>
+
+    <!-- Serial console for troubleshooting -->
+    <console type="pty">
+      <target type="serial" port="0"/>
+    </console>
+
+    <!-- USB controller -->
+    <controller type="usb" index="0" model="qemu-xhci">
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x04" function="0x0"/>
+    </controller>
+
+    <!-- Memory balloon — keep for performance; has no registry footprint -->
+    <memballoon model="virtio"/>
+
+    <!-- Random number source (needed for Secure Boot + UEFI) -->
+    <rng model="virtio">
+      <backend model="random">/dev/urandom</backend>
+    </rng>
+
+  </devices>
+
+</domain>

@@ -73,7 +73,7 @@ class BookmarksService(BaseService):
     def service_name(self) -> str:
         return "BookmarksService"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Write enriched Bookmarks files for all configured browsers.
 
         Args:
@@ -85,16 +85,13 @@ class BookmarksService(BaseService):
         Raises:
             BookmarksServiceError: If writing any bookmark file fails.
         """
-        profile = context.get("profile_name", self._profile_name)
-        user = context.get("username", self._username)
-        browsers = context.get("browsers", None)
+        profile = ctx.persona.profile_archetype
+        user = ctx.identity_bundle.user.username
 
         ts = self._ts.get_timestamp("browser_bookmarks")
         chrome_ts = datetime_to_chrome(ts["created"])
 
         for browser_name, ud_rel in BROWSERS:
-            if browsers and browser_name not in browsers:
-                continue
             self._write_browser_bookmarks(
                 browser_name, ud_rel, profile, user, chrome_ts
             )

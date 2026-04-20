@@ -15,13 +15,15 @@ google-generativeai>=0.8.0   # Gemini API client for persona/seed generation
 jinja2>=3.1.0                # Template engine for content variation
 
 # ---------------------------------------------------------------------------
-# Windows-specific (filesystem attributes + creation-time stamping)
+# Linux mount backend (system packages — not pip-installable)
+# Install with: apt install libguestfs-tools python3-guestfs libhivex-bin python3-hivex
+#               apt install ntfs-3g fuse3 guestmount
 # ---------------------------------------------------------------------------
-pywin32>=310              # win32api/win32file for NTFS timestamps & attributes
+# guestfs          -- provided by system package python3-guestfs
+# hivex            -- provided by system package python3-hivex
 
 # ---------------------------------------------------------------------------
-# Registry — Snehal (W1-W2)
-# regipy: read-only offline hive parser (used for VM key detection in vm_scrubber)
+# Registry — hive writer (hivex primary; regipy for read-only inspection)
 # construct: binary struct packing for MRU blobs, UserAssist FILETIME structs
 # ---------------------------------------------------------------------------
 regipy>=6.2.0             # Offline registry hive reader (RegistryHive, NKRecord)

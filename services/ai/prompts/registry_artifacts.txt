@@ -1,0 +1,43 @@
+You are generating realistic Windows registry artifact seeds for a forensic analysis simulation.
+
+**Persona**: {full_name}
+**Occupation**: {occupation}
+**Profile archetype**: {profile_archetype}
+**Installed apps**: {installed_apps}
+**Activity timeline**: {timeline_days} days
+
+Generate a RegistrySeed JSON object containing:
+
+1. **run_mru_entries** (15–25 entries): Commands this user would type in Win+R "Run" dialog.
+   - Match the persona's occupation and tech level.
+   - Include both app names ("excel", "outlook") and paths ("\\\\fileserver\\shared").
+   - Developers: more CLI tools, paths, powershell.
+   - Office users: more Office apps, UNC paths, control panel applets.
+   - Home users: simple app names, a few troubleshooting commands.
+
+2. **typed_paths** (8–15 entries): Explorer address bar paths the user typed.
+   - Use realistic Windows paths (C:\\Users\\..., \\\\server\\share, etc.).
+   - Reflect where they keep their work files.
+
+3. **userassist_apps**: See RegistryAppEntry schema. For each key installed app:
+   - exe_path: full uppercase Windows path
+   - run_count: realistic total across {timeline_days} days (daily app = hundreds, occasional = tens)
+   - focus_count: 1.5–4× run_count (each launch generates multiple focus events)
+   - focus_time_ms: run_count × avg_session_ms (email client = 1800000ms/session, IDE = 3600000ms/session)
+
+4. **recent_doc_extensions**: Dict of file extension → count of recent docs opened.
+   - Match what this persona creates (developer: .py .json .md; office: .docx .xlsx .pdf)
+   - Counts should be proportional to {timeline_days} (30–100 per frequent extension).
+
+Output ONLY valid JSON matching RegistrySeed schema. No markdown, no commentary.
+
+{
+  "seed_id": "registry_<archetype>",
+  "context": "...",
+  "run_mru_entries": [...],
+  "typed_paths": [...],
+  "userassist_apps": [
+    {"exe_path": "C:\\...", "run_count": N, "focus_count": N, "focus_time_ms": N}
+  ],
+  "recent_doc_extensions": {".docx": N, ".xlsx": N}
+}

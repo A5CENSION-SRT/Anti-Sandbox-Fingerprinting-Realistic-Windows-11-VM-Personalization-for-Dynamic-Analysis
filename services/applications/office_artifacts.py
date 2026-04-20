@@ -110,7 +110,7 @@ class OfficeArtifacts(BaseService):
     def service_name(self) -> str:
         return "OfficeArtifacts"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Create Office artifact directories and files.
 
         Args:
@@ -124,10 +124,10 @@ class OfficeArtifacts(BaseService):
         Raises:
             OfficeArtifactsError: If file creation fails.
         """
-        username = context.get("username", "default_user")
-        profile = context.get("profile_type", "home_user")
-        installed = context.get("installed_apps", [])
-        seed = context.get("computer_name", username)
+        username = ctx.identity_bundle.user.username
+        profile = ctx.persona.profile_archetype
+        installed = ctx.persona.installed_apps
+        seed = ctx.identity_bundle.user.computer_name
 
         # Only create Office artifacts if Office apps are in the profile
         office_apps = {"outlook", "teams", "excel", "word", "powerpoint"}

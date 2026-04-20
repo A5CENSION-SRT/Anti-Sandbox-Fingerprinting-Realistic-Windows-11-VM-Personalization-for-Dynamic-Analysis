@@ -123,27 +123,36 @@ class MruRecentDocs(BaseService):
         """Return the unique service name."""
         return "MruRecentDocs"
 
-    def apply(self, context: dict) -> None:
-        """Execute from orchestrator context.
+    def apply(self, ctx: "ServiceContext") -> None:
+        """Execute from orchestrator context."""
+        profile_type = ctx.persona.profile_archetype
+        username = ctx.identity_bundle.user.username
 
-        Expects context keys:
-            profile_type: str — one of "home", "office", "developer".
-            username: str — the profile username.
+        expansion = getattr(ctx, "expansion", None)
+        registry_seed = getattr(expansion, "registry", None) if expansion is not None else None
 
-        Raises:
-            MruRecentDocsError: If required keys are missing.
-        """
-        profile_type = context.get("profile_type")
-        if profile_type is None:
-            raise MruRecentDocsError(
-                "Missing required 'profile_type' in context"
+        if registry_seed is not None and registry_seed.recent_doc_extensions:
+            filenames = _filenames_from_extensions(registry_seed.recent_doc_extensions)
+            operations = self.build_operations(filenames, username)
+            try:
+                self._hive_writer.execute_operations(operations)
+            except HiveWriterError as exc:
+                raise MruRecentDocsError(f"Failed to write recent docs: {exc}") from exc
+            self._audit_logger.log({
+                "service": self.service_name,
+                "operation": "write_recent_docs_complete",
+                "source": "seed",
+                "profile_type": profile_type,
+                "username": username,
+                "documents_count": len(filenames),
+                "operations_count": len(operations),
+            })
+            logger.info(
+                "Written %d recent docs from seed for '%s'",
+                len(filenames), username,
             )
-        username = context.get("username")
-        if username is None:
-            raise MruRecentDocsError(
-                "Missing required 'username' in context"
-            )
-        self.write_recent_docs(profile_type, username)
+        else:
+            self.write_recent_docs(profile_type, username)
 
     # -- public API ---------------------------------------------------------
 
@@ -356,3 +365,42 @@ class MruRecentDocs(BaseService):
                 key = ".unknown"
             by_ext.setdefault(key, []).append(name)
         return by_ext
+
+
+# ---------------------------------------------------------------------------
+# Module helpers
+# ---------------------------------------------------------------------------
+
+_RECENT_DOC_BASE_NAMES: List[str] = [
+    "Report", "Notes", "Summary", "Draft", "Proposal", "Budget",
+    "Plan", "Spec", "Analysis", "Review", "Document", "Presentation",
+    "Data", "Meeting", "Project", "Invoice", "Template", "Archive",
+    "Schedule", "Roadmap", "Checklist", "Overview", "Feedback",
+]
+
+
+def _filenames_from_extensions(ext_counts: Dict[str, int]) -> List[str]:
+    """Expand an extension → count map from RegistrySeed into MRU filenames.
+
+    Produces at most 15 filenames per extension and caps total at 30 entries,
+    matching realistic Windows RecentDocs MRU list sizes.
+
+    Args:
+        ext_counts: Dict mapping file extension (e.g. ``.docx``) to count.
+
+    Returns:
+        Ordered list of filenames suitable for :meth:`MruRecentDocs.build_operations`.
+    """
+    import random as _rand
+    rng = _rand.Random(hash(tuple(sorted(ext_counts.items()))))
+
+    filenames: List[str] = []
+    for ext, count in sorted(ext_counts.items(), key=lambda x: -x[1]):
+        cap = min(count, 15)
+        names_for_ext = rng.sample(_RECENT_DOC_BASE_NAMES, min(cap, len(_RECENT_DOC_BASE_NAMES)))
+        for i, name in enumerate(names_for_ext):
+            suffix = f"_{i + 1}" if i > 0 else ""
+            filenames.append(f"{name}{suffix}{ext}")
+        if len(filenames) >= 30:
+            break
+    return filenames[:30]

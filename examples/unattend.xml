@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ARC Baseline VHDX — Windows 11 Unattended Answer File
+  ======================================================
+  Used with: scripts/build_baseline_vhdx.sh
+  Tested on: Windows 11 23H2 (22631.xxxx)
+
+  What this does:
+    - Skips ALL OOBE screens (language, region, keyboard, account, Cortana, privacy)
+    - Creates a local administrator account "ARCUser" (password: ARC-Baseline-2024!)
+    - Enables auto-logon for first boot so FirstLogonCommands can run
+    - Disables Windows Defender SmartScreen and telemetry that would block first-run
+    - Runs a PowerShell one-liner after first logon that waits 3 minutes then shuts down
+      (giving Windows time to complete post-OOBE tasks like WU client init)
+    - The VM shuts down cleanly → virt-install exits → baseline VHDX is ready
+
+  SECURITY NOTE:
+    This image is for offline forensic simulation only.
+    The default password MUST be changed before any network exposure.
+    Do NOT use this unattend for production environments.
+-->
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <!-- ================================================================
+       Pass: windowsPE  (runs during text-mode setup from the install ISO)
+       ================================================================ -->
+  <settings pass="windowsPE">
+
+    <!-- Component: Setup — disk partitioning -->
+    <component name="Microsoft-Windows-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS"
+               xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+
+      <!-- Skip EULA acceptance dialog -->
+      <UserData>
+        <AcceptEula>true</AcceptEula>
+        <FullName>ARC User</FullName>
+        <Organization>ARC Forensic Lab</Organization>
+      </UserData>
+
+      <!-- Disk configuration: single GPT partition layout -->
+      <DiskConfiguration>
+        <WillShowUI>Never</WillShowUI>
+        <Disk wcm:action="add">
+          <DiskID>0</DiskID>
+          <WillWipeDisk>true</WillWipeDisk>
+          <CreatePartitions>
+            <!-- EFI system partition -->
+            <CreatePartition wcm:action="add">
+              <Order>1</Order>
+              <Type>EFI</Type>
+              <Size>512</Size>
+            </CreatePartition>
+            <!-- Microsoft Reserved Partition -->
+            <CreatePartition wcm:action="add">
+              <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>128</Size>
+            </CreatePartition>
+            <!-- Windows OS partition (remaining space) -->
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
+              <Type>Primary</Type>
+              <Extend>true</Extend>
+            </CreatePartition>
+          </CreatePartitions>
+          <ModifyPartitions>
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Label>System</Label>
+              <Format>FAT32</Format>
+            </ModifyPartition>
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>3</PartitionID>
+              <Label>Windows</Label>
+              <Format>NTFS</Format>
+              <Letter>C</Letter>
+            </ModifyPartition>
+          </ModifyPartitions>
+        </Disk>
+      </DiskConfiguration>
+
+      <!-- Install image selection (index 6 = Windows 11 Pro) -->
+      <ImageInstall>
+        <OSImage>
+          <WillShowUI>Never</WillShowUI>
+          <InstallTo>
+            <DiskID>0</DiskID>
+            <PartitionID>3</PartitionID>
+          </InstallTo>
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/INDEX</Key>
+              <Value>6</Value>
+            </MetaData>
+          </InstallFrom>
+        </OSImage>
+      </ImageInstall>
+
+    </component>
+
+    <!-- Component: International settings during setup -->
+    <component name="Microsoft-Windows-International-Core-WinPE"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+      <SetupUILanguage>
+        <UILanguage>en-US</UILanguage>
+        <WillShowUI>Never</WillShowUI>
+      </SetupUILanguage>
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+  </settings>
+
+  <!-- ================================================================
+       Pass: specialize  (runs after setup, before OOBE, to configure OS)
+       ================================================================ -->
+  <settings pass="specialize">
+
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+      <ComputerName>ARC-BASELINE</ComputerName>
+      <TimeZone>UTC</TimeZone>
+      <!-- Disable Windows customer experience improvement program -->
+      <RegisteredOwner>ARC User</RegisteredOwner>
+      <RegisteredOrganization>ARC Forensic Lab</RegisteredOrganization>
+    </component>
+
+    <!-- Disable Windows Update auto-download during setup -->
+    <component name="Microsoft-Windows-WindowsUpdate-AU"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+      <NoAutoUpdate>true</NoAutoUpdate>
+    </component>
+
+  </settings>
+
+  <!-- ================================================================
+       Pass: oobeSystem  (runs at OOBE; we skip all of it)
+       ================================================================ -->
+  <settings pass="oobeSystem">
+
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+
+      <!-- Skip all OOBE screens -->
+      <OOBE>
+        <HideEULAPage>true</HideEULAPage>
+        <HideLocalAccountScreen>false</HideLocalAccountScreen>
+        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
+        <HideOnlineAccountScreens>true</HideOnlineAccountScreens>
+        <HideWirelessSetupInOOBE>true</HideWirelessSetupInOOBE>
+        <ProtectYourPC>3</ProtectYourPC>
+        <SkipMachineOOBE>true</SkipMachineOOBE>
+        <SkipUserOOBE>true</SkipUserOOBE>
+        <NetworkLocation>Work</NetworkLocation>
+      </OOBE>
+
+      <!-- Create local admin account -->
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add"
+                        xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+            <Name>ARCUser</Name>
+            <DisplayName>ARC User</DisplayName>
+            <Group>Administrators</Group>
+            <Password>
+              <!-- plaintext; Windows hashes it during setup -->
+              <Value>ARC-Baseline-2024!</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+
+      <!-- Auto-logon once so FirstLogonCommands can run unattended -->
+      <AutoLogon>
+        <Enabled>true</Enabled>
+        <LogonCount>1</LogonCount>
+        <Username>ARCUser</Username>
+        <Password>
+          <Value>ARC-Baseline-2024!</Value>
+          <PlainText>true</PlainText>
+        </Password>
+      </AutoLogon>
+
+      <!-- FirstLogonCommands: wait for Windows to settle, then shut down cleanly.
+           The 180-second sleep gives WU client, Defender, and svchost time to
+           finish their first-run initialisation so the VHDX has a clean log state. -->
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add"
+                            xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>1</Order>
+          <CommandLine>powershell.exe -NonInteractive -Command "Start-Sleep -Seconds 180; Stop-Computer -Force"</CommandLine>
+          <Description>Wait 3 minutes for first-boot tasks to complete, then shut down</Description>
+          <RequiresUserInput>false</RequiresUserInput>
+        </SynchronousCommand>
+      </FirstLogonCommands>
+
+    </component>
+
+    <!-- International settings for the user session -->
+    <component name="Microsoft-Windows-International-Core"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+  </settings>
+
+</unattend>

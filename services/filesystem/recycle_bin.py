@@ -94,7 +94,7 @@ class RecycleBinService(BaseService):
     def service_name(self) -> str:
         return "RecycleBinService"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Generate Recycle Bin artifacts for the user profile.
 
         Args:
@@ -108,10 +108,10 @@ class RecycleBinService(BaseService):
         Raises:
             RecycleBinError: If Recycle Bin generation fails.
         """
-        username = context.get("username", "default_user")
-        profile_type = context.get("profile_type", "home_user")
-        seed = context.get("computer_name", username)
-        user_sid = context.get("user_sid", self._generate_sid(username, seed))
+        username = ctx.identity_bundle.user.username
+        profile_type = ctx.persona.profile_archetype
+        seed = ctx.identity_bundle.user.computer_name
+        user_sid = self._generate_sid(username, seed)
 
         rng = Random(hash(seed + profile_type))
         recycle_dir = Path("$Recycle.Bin") / user_sid

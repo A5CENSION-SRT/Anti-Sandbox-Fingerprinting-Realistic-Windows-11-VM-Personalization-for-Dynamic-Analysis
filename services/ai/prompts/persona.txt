@@ -29,22 +29,29 @@ Create a coherent, believable persona that could be a real person. Output ONLY v
     "collaboration_style": "solo|collaborative|hybrid",
     "meeting_frequency": "low|moderate|high"
   }},
-  "project_names": ["Project Alpha", "Q4 Initiative", "Client Portal", "..."],
-  "colleague_names": ["John Smith", "Sarah Johnson", "Mike Chen", "..."],
+  "project_names": ["Project Alpha", "Q4 Initiative", "Client Portal"],
+  "colleague_names": ["John Smith", "Sarah Johnson", "Mike Chen"],
   "work_hours_start": 9,
   "work_hours_end": 17,
-  "active_days": [1, 2, 3, 4, 5]
+  "active_days": [1, 2, 3, 4, 5],
+  "profile_archetype": "developer|office_user|home_user",
+  "installed_apps": ["app1", "app2", "app3"],
+  "browsing_categories": ["category1", "category2"],
+  "daily_avg_sites": 50,
+  "timeline_days": 360,
+  "windows_build_hint": "22H2|23H2|24H2",
+  "hostname_hints": ["hint1", "hint2"]
 }}
 ```
 
 Requirements:
-1. **Name**: Use a realistic name appropriate for the locale
-2. **Username**: Format as firstname.lastname (lowercase, no spaces)
+1. **Name**: Realistic name appropriate for the locale
+2. **Username**: Format as firstname.lastname (lowercase, no spaces, 3-20 chars)
 3. **Email**: Use organization domain (derive from company name)
 4. **Organization**: For personal/home users, use "Personal"
-5. **Age Range**: Appropriate for the occupation (e.g., senior roles = older)
-6. **Tech Proficiency**: Based on occupation (developers=high, general office=intermediate)
-7. **Interests**: 
+5. **Age Range**: Appropriate for the occupation (senior roles = older)
+6. **Tech Proficiency**: Based on occupation — developers/engineers=high, general office=intermediate, home/casual=low
+7. **Interests**:
    - 5-8 hobbies relevant to persona demographics
    - 3-5 professional topics they'd follow
    - 2-4 entertainment preferences
@@ -52,10 +59,18 @@ Requirements:
 9. **Project Names**: 5-10 realistic project/initiative names they'd work on
 10. **Colleague Names**: 8-15 realistic colleague names for documents
 11. **Work Hours**: Appropriate for the role and culture
+12. **Profile Archetype**: Choose the closest match — developer (software/IT/engineering), office_user (business/admin/sales/HR), home_user (personal use, student, freelancer)
+13. **Installed Apps**: 6-12 realistic applications for this persona. Use lowercase short names: e.g. vscode, docker, chrome, teams, slack, outlook, excel, word, git, terminal, zoom, spotify
+14. **Browsing Categories**: 3-6 categories from: technology, development, news, business, social, entertainment, shopping, health, finance, education, gaming, documentation, stackoverflow, github
+15. **Daily Avg Sites**: Realistic daily unique sites (developers: 60-120, office: 30-70, home: 20-50)
+16. **Timeline Days**: Always 360 (one year of activity history)
+17. **Windows Build Hint**: 23H2 for most users, 24H2 for power users/developers
+18. **Hostname Hints**: 2-3 short words that could appear in a Windows hostname — usually related to org, role, or persona name (e.g. ["dev", "laptop"], ["corp", "ws"], ["home", "pc"])
 
-Make all elements internally consistent - a marketing manager's hobbies, tools, and projects should all feel coherent.
+Make all elements internally consistent — a marketing manager's hobbies, tools, installed apps, and browsing categories should all feel coherent.
 
 Important:
 - Do NOT use alternate key names like name, role, age, technical_proficiency, or persona_summary.
 - Use ONLY the exact keys shown in the JSON schema above.
 - Output raw JSON only (no markdown fences, no commentary).
+- timeline_days must always be 360.

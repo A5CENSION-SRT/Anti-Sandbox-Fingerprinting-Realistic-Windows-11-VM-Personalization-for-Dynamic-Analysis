@@ -221,7 +221,7 @@ class EvtxWriter(BaseService):
         """Return the unique service name."""
         return "EvtxWriter"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Execute from orchestrator context.
 
         Expects context keys:
@@ -233,8 +233,8 @@ class EvtxWriter(BaseService):
         log services (SystemLog, SecurityLog, ApplicationLog) call
         :meth:`write_records` directly with their own path.
         """
-        records = context.get("records", [])
-        evtx_path = context.get("evtx_path")
+        records: list = []
+        evtx_path: str = ""
         if not evtx_path:
             # No-op: log services call write_records() directly
             return

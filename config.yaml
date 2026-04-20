@@ -5,14 +5,14 @@
 mount_path: "./output"
 
 # Profile configuration
-profiles_dir: "profiles"
-profile_name: "home_user"
+profiles_dir: "profiles/generated"
+profile_name: ""
 
 # Data directory (contains hardware_models.json, wordlists, etc.)
 data_dir: "data"
 
 # Timeline configuration
-timeline_days: 90
+timeline_days: 360
 
 # Audit log path
 audit_log_path: "audit.log"
@@ -54,72 +54,59 @@ ai:
     directory: ".cache/gemini"
     ttl_hours: 168  # 1 week
   
-  # Fallback behavior when API unavailable
+  # No fallback — AI generation is mandatory
   fallback:
-    enabled: true
-    use_static_profiles: true
-    log_warnings: true
+    enabled: false
 
 # ---------------------------------------------------------------------------
-# Artifact Scale Targets
+# Artifact Scale — per-day rates (ADR-013)
+# target_count = per_day × persona.timeline_days × (1 + rng.uniform(-jitter, +jitter))
 # ---------------------------------------------------------------------------
 artifact_scale:
-  # Target counts per artifact type (seeds × expansion = total)
   downloads:
-    seeds: 20
-    expansion_factor: 75
-    target_total: 1500
-  
+    per_day: 4.2
+    jitter: 0.3
+
   documents:
-    seeds: 30
-    expansion_factor: 150
-    target_total: 4500
-  
+    per_day: 12.5
+    jitter: 0.3
+
   pictures:
-    seeds: 15
-    expansion_factor: 50
-    target_total: 750
-  
+    per_day: 2.1
+    jitter: 0.4
+
   videos:
-    seeds: 8
-    expansion_factor: 30
-    target_total: 240
-  
+    per_day: 0.67
+    jitter: 0.4
+
   music:
-    seeds: 10
-    expansion_factor: 50
-    target_total: 500
-  
+    per_day: 1.4
+    jitter: 0.3
+
   browser_history:
-    seeds: 50
-    expansion_factor: 150
-    target_total: 7500
-  
+    per_day: 83.0
+    jitter: 0.5
+
   search_terms:
-    seeds: 50
-    expansion_factor: 30
-    target_total: 1500
-  
+    per_day: 16.7
+    jitter: 0.5
+
   bookmarks:
-    seeds: 40
-    expansion_factor: 5
-    target_total: 200
+    per_day: 0.56
+    jitter: 0.2
 
 # ---------------------------------------------------------------------------
 # Permutation Engine Configuration
 # ---------------------------------------------------------------------------
 permutation:
-  # Date range for spreading artifacts
-  date_spread_days: 90
-  
   # Version number settings
   versions:
     max_version: 5
     styles: ["v{n}", "V{n}", "_{n}"]
-  
+
   # Common filename suffixes
   suffixes: ["", "_DRAFT", "_Final", "_reviewed", "_backup", "_old"]
-  
+
   # Date format patterns for filenames
   date_formats:
     - "%Y%m%d"

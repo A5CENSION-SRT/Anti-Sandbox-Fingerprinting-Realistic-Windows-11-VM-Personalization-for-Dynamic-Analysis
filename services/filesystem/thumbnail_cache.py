@@ -95,7 +95,7 @@ class ThumbnailCacheService(BaseService):
     def service_name(self) -> str:
         return "ThumbnailCacheService"
 
-    def apply(self, context: dict) -> None:
+    def apply(self, ctx: "ServiceContext") -> None:
         """Generate thumbnail cache files for the user profile.
 
         Args:
@@ -108,9 +108,9 @@ class ThumbnailCacheService(BaseService):
         Raises:
             ThumbnailCacheError: If cache generation fails.
         """
-        username = context.get("username", "default_user")
-        profile_type = context.get("profile_type", "home_user")
-        seed = context.get("computer_name", username)
+        username = ctx.identity_bundle.user.username
+        profile_type = ctx.persona.profile_archetype
+        seed = ctx.identity_bundle.user.computer_name
 
         rng = Random(hash(seed + profile_type))
         cache_dir = (
