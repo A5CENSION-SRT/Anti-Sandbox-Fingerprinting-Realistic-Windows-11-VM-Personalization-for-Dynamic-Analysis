@@ -411,8 +411,8 @@ class ProfileSeeds(BaseModel):
 
     # Metadata
     generated_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="When seeds were generated"
+        default_factory=lambda: datetime(2024, 1, 1, tzinfo=__import__("datetime").timezone.utc),
+        description="When seeds were generated (set explicitly at generation time)"
     )
     gemini_model: str = Field(
         default="gemini-2.0-flash",

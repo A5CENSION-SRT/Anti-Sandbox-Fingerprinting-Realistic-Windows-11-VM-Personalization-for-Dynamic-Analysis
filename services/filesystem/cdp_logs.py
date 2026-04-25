@@ -163,15 +163,18 @@ class CdpLogsService(BaseService):
             # AccountName file
             (cdp_dir / "AccountName").write_text(username, encoding="utf-8")
 
+            from core.time_utils import sched_now as _sched_now
+            sched_now = _sched_now(ctx)
+
             # connected_devices.json
-            devices = self._gen_device_list(rng)
+            devices = self._gen_device_list(rng, sched_now)
             (cdp_dir / "connected_devices.json").write_text(
                 json.dumps(devices, indent=2), encoding="utf-8"
             )
 
             # ActivitiesCache.db
             db_path = cdp_dir / "ActivitiesCache.db"
-            record_count = self._build_activities_db(db_path, username, timeline_days, rng)
+            record_count = self._build_activities_db(db_path, username, timeline_days, rng, sched_now)
 
         except Exception as exc:
             raise CdpLogsError(f"Failed to generate CDP logs: {exc}") from exc
@@ -192,12 +195,14 @@ class CdpLogsService(BaseService):
         username: str,
         timeline_days: int,
         rng: Random,
+        now: datetime | None = None,
     ) -> int:
         """Build ActivitiesCache.db with synthetic activity rows."""
+        if now is None:
+            raise ValueError("_build_activities_db: 'now' must be provided (use sched_now(ctx))")
         conn = sqlite3.connect(str(db_path))
         try:
             conn.executescript(_CDP_SCHEMA)
-            now = datetime.now(timezone.utc)
             start = now - timedelta(days=timeline_days)
 
             record_count = rng.randint(
@@ -237,7 +242,7 @@ class CdpLogsService(BaseService):
         return record_count
 
     @staticmethod
-    def _gen_device_list(rng: Random) -> list:
+    def _gen_device_list(rng: Random, now: datetime | None = None) -> list:
         """Generate a plausible connected-devices JSON structure."""
         device_types = ["Phone", "Laptop", "Desktop", "Tablet"]
         device_count = rng.randint(1, 3)
@@ -250,7 +255,7 @@ class CdpLogsService(BaseService):
                 "platform": rng.choice(["Windows", "Android", "iOS"]),
                 "mac": mac,
                 "lastSeen": (
-                    datetime.now(timezone.utc) - timedelta(hours=rng.randint(0, 720))
+                    now - timedelta(hours=rng.randint(0, 720))
                 ).isoformat(),
             })
         return devices

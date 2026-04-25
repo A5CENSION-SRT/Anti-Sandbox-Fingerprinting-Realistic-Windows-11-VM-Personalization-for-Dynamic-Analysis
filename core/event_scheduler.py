@@ -111,6 +111,16 @@ class EventScheduler:
         """Return all events of a specific kind."""
         return [e for e in self.emit() if e.kind == kind]
 
+    @property
+    def now(self) -> datetime:
+        """Simulation 'current time' (UTC). Services use this instead of datetime.now()."""
+        return self._now
+
+    @property
+    def install_time(self) -> datetime:
+        """OS install time (UTC). Timeline events start here."""
+        return self._install_time
+
     def child_rng(self, name: str) -> random.Random:
         """Return a deterministic child RNG isolated by *name*.
 

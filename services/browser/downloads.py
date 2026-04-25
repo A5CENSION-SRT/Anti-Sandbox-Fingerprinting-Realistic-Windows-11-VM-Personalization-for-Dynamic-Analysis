@@ -74,9 +74,11 @@ class BrowserDownloadService(BaseService):
         wh = {"start": ctx.persona.work_hours_start, "end": ctx.persona.work_hours_end}
 
         catalogue = load_download_catalogue(self._data_dir)
-        rng = random.Random(43)          # different seed from visits
+        rng = (ctx.scheduler.child_rng("BrowserDownloads")
+               if ctx.scheduler else random.Random(43))
         entries = select_downloads(catalogue, profile, rng, count)
-        now = datetime.now(timezone.utc)
+        from core.time_utils import sched_now as _sched_now
+        now = _sched_now(ctx)
 
         # 1. Filesystem stubs in Downloads folder (browser-agnostic)
         dl_dir = self._mount.resolve(

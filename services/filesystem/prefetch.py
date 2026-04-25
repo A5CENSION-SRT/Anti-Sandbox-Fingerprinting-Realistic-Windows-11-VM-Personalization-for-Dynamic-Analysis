@@ -488,7 +488,8 @@ class PrefetchService(BaseService):
             full_prefetch = self._mount.resolve(str(prefetch_dir))
             full_prefetch.mkdir(parents=True, exist_ok=True)
 
-            now = datetime.now(timezone.utc)
+            from core.time_utils import sched_now
+            now = sched_now(ctx)
 
             # Use AI-generated seed if available; fall back to static profile tables
             expansion = getattr(ctx, "expansion", None)

@@ -211,12 +211,15 @@ class CookiesCacheService(BaseService):
         categories = ctx.persona.browsing_categories
         seed = ctx.identity_bundle.user.computer_name
         timeline_days = ctx.persona.timeline_days
-        rng = random.Random(hash(seed + profile))
+        rng = (ctx.scheduler.child_rng("BrowserCookies")
+               if ctx.scheduler else random.Random(hash(seed + profile)))
+        from core.time_utils import sched_now as _sched_now
+        sched_now = _sched_now(ctx)
 
         for browser_name, ud_rel in BROWSERS:
             pf_path = os.path.join("Users", user, ud_rel, "Default")
             self._create_cookies_db(
-                browser_name, pf_path, categories, rng, timeline_days,
+                browser_name, pf_path, categories, rng, timeline_days, sched_now,
             )
             self._create_cache_stubs(browser_name, pf_path)
 
@@ -231,6 +234,7 @@ class CookiesCacheService(BaseService):
         categories: list[str],
         rng: random.Random,
         timeline_days: int,
+        now: datetime | None = None,
     ) -> None:
         """Build a Chromium Cookies SQLite database.
 
@@ -240,7 +244,11 @@ class CookiesCacheService(BaseService):
             categories: Browsing categories from the profile config.
             rng: Seeded Random instance.
             timeline_days: How far back cookie creation dates should span.
+            now: Reference timestamp (UTC). Must be provided via sched_now(ctx).
         """
+        if now is None:
+            raise ValueError("_create_cookies_db: 'now' must be provided (use sched_now(ctx))")
+
         dest_dir = self._mount.resolve(pf_path)
         dest_dir.mkdir(parents=True, exist_ok=True)
         db_path = dest_dir / "Cookies"
@@ -248,7 +256,6 @@ class CookiesCacheService(BaseService):
         # Collect domains relevant to this profile
         domains = self._domains_for_categories(categories)
 
-        now = datetime.now(timezone.utc)
         start = now - timedelta(days=timeline_days)
 
         conn = sqlite3.connect(str(db_path))

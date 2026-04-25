@@ -1,0 +1,100 @@
+# PersonaContext preset — office_user (ADR-001)
+# Used when --preset office_user is passed and --ai-generate is not set.
+
+full_name: "Sarah Mitchell"
+username: "smitchell"
+email: "sarah.mitchell@contoso.com"
+organization: "Contoso Ltd."
+occupation: "Project Manager"
+department: "Operations"
+
+age_range: "35-40"
+locale: "en_US"
+location: "Chicago, IL"
+
+tech_proficiency: intermediate
+interests:
+  hobbies:
+    - yoga
+    - reading
+    - travel planning
+    - wine tasting
+    - gardening
+  professional_topics:
+    - project management
+    - process optimization
+    - budget forecasting
+    - stakeholder communication
+  entertainment:
+    - LinkedIn Learning
+    - Audible
+    - Netflix
+
+work_style:
+  description: "Office hours 9–5, heavy email and Teams usage, presentation-heavy"
+  typical_tools:
+    - OUTLOOK.EXE
+    - Teams.exe
+    - WINWORD.EXE
+    - EXCEL.EXE
+    - POWERPNT.EXE
+    - chrome.exe
+    - OneDrive.exe
+    - SharePoint
+    - Zoom.exe
+  collaboration_style: "synchronous"
+  meeting_frequency: "high"
+
+project_names:
+  - Q1_Budget_Review
+  - EMEA_Expansion_2024
+  - HR_Process_Redesign
+  - Customer_Portal_Launch
+  - Annual_Report_2023
+  - Supplier_Audit_Q2
+  - Training_Programme
+
+colleague_names:
+  - David Nguyen
+  - Rachel Foster
+  - Tom Williams
+  - Lisa Park
+  - Michael Brown
+  - Anna Kowalski
+  - James Harrison
+
+work_hours_start: 8
+work_hours_end: 17
+active_days: [1, 2, 3, 4, 5]
+
+profile_archetype: office_user
+installed_apps:
+  - OUTLOOK.EXE
+  - Teams.exe
+  - WINWORD.EXE
+  - EXCEL.EXE
+  - POWERPNT.EXE
+  - ONENOTE.EXE
+  - chrome.exe
+  - OneDrive.exe
+  - Zoom.exe
+  - slack.exe
+  - explorer.exe
+  - notepad.exe
+  - 7zFM.exe
+  - AcroRd32.exe
+
+browsing_categories:
+  - business_news
+  - linkedin
+  - productivity_tools
+  - travel
+  - shopping
+  - general
+
+daily_avg_sites: 35
+timeline_days: 360
+windows_build_hint: "23H2"
+hostname_hints:
+  - CONTOSO-SMITCH
+  - SMITCHELL-LAPTOP

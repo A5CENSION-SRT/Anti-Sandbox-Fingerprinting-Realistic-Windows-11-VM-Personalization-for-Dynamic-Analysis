@@ -1,0 +1,95 @@
+# PersonaContext preset — home_user (ADR-001)
+# Used when --preset home_user is passed and --ai-generate is not set.
+
+full_name: "Alex Johnson"
+username: "alexj"
+email: "alex.johnson@gmail.com"
+organization: "Self"
+occupation: "Graphic Designer (Freelance)"
+department: null
+
+age_range: "28-32"
+locale: "en_US"
+location: "Austin, TX"
+
+tech_proficiency: intermediate
+interests:
+  hobbies:
+    - photography
+    - gaming
+    - cooking
+    - hiking
+    - music production
+  professional_topics:
+    - design trends
+    - photo editing
+    - typography
+  entertainment:
+    - Netflix
+    - YouTube
+    - Spotify
+
+work_style:
+  description: "Freelancer working from home, flexible hours, frequent breaks"
+  typical_tools:
+    - Adobe Photoshop
+    - Adobe Lightroom
+    - Canva
+    - Firefox
+    - Discord
+    - Spotify
+  collaboration_style: "async"
+  meeting_frequency: "low"
+
+project_names:
+  - BrandKit_2024
+  - Logo_Refresh_Acme
+  - SocialMedia_Batch
+  - Photography_Portfolio
+  - HomeDecor_Project
+  - Wedding_Album_Smith
+  - YouTube_Thumbnails
+
+colleague_names:
+  - Sarah Mitchell
+  - James Park
+  - Laura Chen
+  - David Nguyen
+  - Emma Wilson
+  - Carlos Rodriguez
+
+work_hours_start: 10
+work_hours_end: 18
+active_days: [1, 2, 3, 4, 5]
+
+profile_archetype: home_user
+installed_apps:
+  - firefox.exe
+  - chrome.exe
+  - spotify.exe
+  - discord.exe
+  - steam.exe
+  - PHOTOSHOP.EXE
+  - Lightroom.exe
+  - vlc.exe
+  - explorer.exe
+  - notepad.exe
+  - mspaint.exe
+  - winrar.exe
+  - 7zFM.exe
+  - OneDrive.exe
+
+browsing_categories:
+  - photography
+  - gaming
+  - social_media
+  - entertainment
+  - shopping
+  - tutorials
+
+daily_avg_sites: 45
+timeline_days: 360
+windows_build_hint: "23H2"
+hostname_hints:
+  - ALEXJ-PC
+  - DESKTOP-ALEXJ

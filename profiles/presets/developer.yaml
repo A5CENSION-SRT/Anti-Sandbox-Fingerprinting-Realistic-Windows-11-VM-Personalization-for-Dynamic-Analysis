@@ -1,0 +1,108 @@
+# PersonaContext preset — developer (ADR-001)
+# Used when --preset developer is passed and --ai-generate is not set.
+
+full_name: "Jordan Chen"
+username: "jordanc"
+email: "jordan.chen@techcorp.io"
+organization: "TechCorp Solutions"
+occupation: "Senior Software Engineer"
+department: "Platform Engineering"
+
+age_range: "29-33"
+locale: "en_US"
+location: "Seattle, WA"
+
+tech_proficiency: high
+interests:
+  hobbies:
+    - open source contribution
+    - mechanical keyboards
+    - gaming
+    - rock climbing
+    - 3D printing
+  professional_topics:
+    - distributed systems
+    - Rust
+    - Kubernetes
+    - security engineering
+    - API design
+  entertainment:
+    - YouTube (tech)
+    - Twitch
+    - Hacker News
+
+work_style:
+  description: "Deep focus blocks, heavy CLI usage, remote-first, async comms"
+  typical_tools:
+    - code.exe
+    - WindowsTerminal.exe
+    - git.exe
+    - docker.exe
+    - chrome.exe
+    - slack.exe
+    - Postman.exe
+    - DBeaver.exe
+    - python.exe
+    - node.exe
+  collaboration_style: "async"
+  meeting_frequency: "moderate"
+
+project_names:
+  - platform-core
+  - auth-service
+  - data-pipeline
+  - monitoring-stack
+  - k8s-migration
+  - api-gateway-v2
+  - personal-homelab
+  - rust-experiments
+
+colleague_names:
+  - Priya Sharma
+  - Marcus Webb
+  - Keiko Tanaka
+  - Raj Patel
+  - Sophie Laurent
+  - Andrei Popescu
+  - Nathan Kim
+
+work_hours_start: 9
+work_hours_end: 18
+active_days: [1, 2, 3, 4, 5]
+
+profile_archetype: developer
+installed_apps:
+  - Code.exe
+  - WindowsTerminal.exe
+  - git.exe
+  - chrome.exe
+  - firefox.exe
+  - slack.exe
+  - docker.exe
+  - Postman.exe
+  - python.exe
+  - node.exe
+  - wsl.exe
+  - powershell.exe
+  - explorer.exe
+  - notepad.exe
+  - OneDrive.exe
+  - Teams.exe
+  - DBeaver.exe
+  - 7zFM.exe
+
+browsing_categories:
+  - technology
+  - github
+  - stackoverflow
+  - documentation
+  - cloud_services
+  - security
+  - news_tech
+
+daily_avg_sites: 80
+timeline_days: 360
+windows_build_hint: "23H2"
+hostname_hints:
+  - JORDANC-DEV
+  - TECHCORP-JORDANC

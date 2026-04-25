@@ -322,17 +322,20 @@ class DocumentGenerator(BaseService):
         profile_type = ctx.persona.profile_archetype
         seed = ctx.identity_bundle.user.computer_name
 
-        rng = Random(hash(seed + profile_type))
+        rng = (ctx.scheduler.child_rng("DocumentGenerator")
+               if ctx.scheduler else Random(hash(seed + profile_type)))
+        from core.time_utils import sched_now as _sched_now
+        sched_now = _sched_now(ctx)
         created_files = 0
 
         try:
             if ctx.expansion is not None and ctx.expansion.documents:
                 created_files = self._write_expansion_documents(
-                    ctx.expansion.documents, username, rng
+                    ctx.expansion.documents, username, rng, sched_now
                 )
             else:
                 created_files = self._write_hardcoded_documents(
-                    profile_type, username, rng
+                    profile_type, username, rng, sched_now
                 )
 
             self._audit.log({
@@ -357,6 +360,7 @@ class DocumentGenerator(BaseService):
         descriptors: list,
         username: str,
         rng: Random,
+        now: datetime | None = None,
     ) -> int:
         """Write document files from ExpansionBundle descriptors.
 
@@ -384,7 +388,7 @@ class DocumentGenerator(BaseService):
             elif ext in (".pdf",):
                 raw = self._generate_pdf_stub(rng, (8192, 65536))
             else:
-                raw = self._generate_text_content("notes", rng).encode("utf-8")
+                raw = self._generate_text_content("notes", rng, now).encode("utf-8")
 
             self._write_file(rel_path, raw)
             written += 1
@@ -396,6 +400,7 @@ class DocumentGenerator(BaseService):
         profile_type: str,
         username: str,
         rng: Random,
+        now: datetime | None = None,
     ) -> int:
         """Write the small hardcoded document list for this profile type."""
         docs_dir = Path("Users") / username / "Documents"
@@ -412,7 +417,7 @@ class DocumentGenerator(BaseService):
 
             file_path = docs_dir / doc_spec["name"]
             if doc_type in ("txt", "json"):
-                content = self._generate_text_content(doc_spec.get("content", "notes"), rng)
+                content = self._generate_text_content(doc_spec.get("content", "notes"), rng, now)
                 self._write_file(file_path, content.encode("utf-8"))
             elif doc_type == "docx":
                 self._write_file(file_path, self._generate_docx_stub(rng, doc_spec.get("size", (4096, 16384))))
@@ -483,13 +488,15 @@ class DocumentGenerator(BaseService):
         self,
         template_key: str,
         rng: Random,
+        now: datetime | None = None,
     ) -> str:
         """Generate text content from template."""
         template = _TEXT_TEMPLATES.get(template_key, "")
 
         # Fill in placeholders — gracefully handle templates that
         # contain literal curly braces (e.g. JSON config content).
-        now = datetime.now(timezone.utc)
+        if now is None:
+            raise ValueError("_generate_text_content: 'now' must be provided (use sched_now(ctx))")
         try:
             content = template.format(
                 date=now.strftime("%B %d, %Y"),

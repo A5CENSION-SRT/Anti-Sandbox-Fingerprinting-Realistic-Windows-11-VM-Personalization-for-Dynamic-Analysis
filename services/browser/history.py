@@ -55,15 +55,21 @@ class BrowserHistoryService(BaseService):
         he = ctx.persona.work_hours_end
         active = ctx.persona.active_days
 
+        from core.time_utils import sched_now as _sched_now
+        sched_now = _sched_now(ctx)
+
         for name, ud_rel in BROWSERS:
             pf = os.path.join("Users", user, ud_rel, "Default")
-            self._build_db(name, pf, days, cats, daily, hs, he, active)
+            rng = (ctx.scheduler.child_rng(f"BrowserHistory.{name}")
+                   if ctx.scheduler else random.Random(hash(name + pf)))
+            self._build_db(name, pf, days, cats, daily, hs, he, active, rng, sched_now)
 
     # ------------------------------------------------------------------
 
     def _build_db(self, browser: str, pf_path: str,
                   days: int, cats: list, daily: int,
-                  hs: int, he: int, active: list) -> None:
+                  hs: int, he: int, active: list,
+                  rng: random.Random, now: datetime) -> None:
         db_dir = self._mount.resolve(pf_path)
         db_dir.mkdir(parents=True, exist_ok=True)
         db_path = db_dir / "History"
@@ -80,11 +86,9 @@ class BrowserHistoryService(BaseService):
                 "INSERT OR REPLACE INTO meta VALUES (?,?)",
                 ("last_compatible_version", LAST_COMPATIBLE_VERSION))
 
-            seed = hash(browser + pf_path)
-            rng = random.Random(seed)
             url_id_map = self._insert_urls(conn, entries, rng)
-            self._insert_visits(conn, entries, url_id_map, days, daily, hs, he, active, rng)
-            self._backfill_last_visit_times(conn, days, rng)
+            self._insert_visits(conn, entries, url_id_map, days, daily, hs, he, active, rng, now)
+            self._backfill_last_visit_times(conn, days, rng, now)
             populate_search_terms(
                 conn, url_id_map, self._loader.load_search_terms(), rng)
             conn.commit()
@@ -111,9 +115,8 @@ class BrowserHistoryService(BaseService):
             id_map[url] = cur.lastrowid
         return id_map
 
-    def _insert_visits(self, conn, entries, id_map, days, daily, hs, he, active, rng):
+    def _insert_visits(self, conn, entries, id_map, days, daily, hs, he, active, rng, now: datetime):
 
-        now = datetime.now(timezone.utc)
         start = now - timedelta(days=days)
         last: dict[str, int] = {}
 
@@ -145,7 +148,7 @@ class BrowserHistoryService(BaseService):
                     "UPDATE urls SET last_visit_time=? WHERE id=?",
                     (lt, uid))
 
-    def _backfill_last_visit_times(self, conn, days: int, rng) -> None:
+    def _backfill_last_visit_times(self, conn, days: int, rng, now: datetime) -> None:
         """Assign a Chrome-epoch last_visit_time to any URL that has
         visit_count > 0 but was never visited in the generated sessions.
 
@@ -158,7 +161,6 @@ class BrowserHistoryService(BaseService):
         if not orphans:
             return
 
-        now = datetime.now(timezone.utc)
         start = now - timedelta(days=days)
         for (uid,) in orphans:
             # Pick a random moment inside the timeline window

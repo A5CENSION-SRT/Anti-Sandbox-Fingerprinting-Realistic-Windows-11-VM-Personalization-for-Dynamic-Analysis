@@ -119,7 +119,8 @@ class OfficeMruService(BaseService):
         else:
             doc_paths = []
 
-        now = datetime.now(timezone.utc)
+        from core.time_utils import sched_now
+        now = sched_now(ctx)
 
         try:
             ops = self.build_operations(username, hive_path, doc_paths, rng, now)
