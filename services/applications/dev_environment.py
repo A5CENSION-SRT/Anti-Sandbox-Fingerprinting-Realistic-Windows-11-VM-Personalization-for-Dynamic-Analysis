@@ -136,7 +136,8 @@ class DevEnvironment(BaseService):
             logger.debug("No dev tools in profile — skipping DevEnvironment")
             return
 
-        rng = Random(hash(seed + profile))
+        rng = (ctx.scheduler.child_rng("DevEnvironment")
+               if ctx.scheduler else Random(hash(seed + profile)))
         user_root = os.path.join("Users", username)
         artifact_count = 0
 

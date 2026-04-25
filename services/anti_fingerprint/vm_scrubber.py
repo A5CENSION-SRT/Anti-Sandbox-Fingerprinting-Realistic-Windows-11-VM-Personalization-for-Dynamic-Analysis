@@ -224,20 +224,23 @@ class VmScrubber(BaseService):
             VmScrubberError: On missing context keys or write failure.
         """
         computer_name = ctx.identity_bundle.user.computer_name
-        self.scrub(computer_name)
+        base_rng = (ctx.scheduler.child_rng("VmScrubber")
+                    if ctx.scheduler is not None else None)
+        self.scrub(computer_name, rng=base_rng)
 
     # -- public API ---------------------------------------------------------
 
-    def scrub(self, computer_name: str) -> None:
+    def scrub(self, computer_name: str, rng: "Optional[Random]" = None) -> None:
         """Build and execute all VM-scrubbing registry operations.
 
         Args:
             computer_name: Used as seed for deterministic replacements.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Raises:
             VmScrubberError: On write failure.
         """
-        operations = self.build_operations(computer_name)
+        operations = self.build_operations(computer_name, rng=rng)
         try:
             self._hive_writer.execute_operations(operations)
         except HiveWriterError as exc:
@@ -256,18 +259,22 @@ class VmScrubber(BaseService):
             len(operations), computer_name,
         )
 
-    def build_operations(self, computer_name: str) -> List[HiveOperation]:
+    def build_operations(
+        self, computer_name: str, rng: "Optional[Random]" = None
+    ) -> List[HiveOperation]:
         """Build all VM-scrubbing operations without writing.
 
         Pure function — suitable for isolated testing.
 
         Args:
             computer_name: Seed for deterministic hardware replacements.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Returns:
             List of :class:`HiveOperation`.
         """
-        rng = Random(hash(computer_name + ":vm_scrub"))
+        if rng is None:
+            rng = Random(hash(computer_name + ":vm_scrub"))
         ops: List[HiveOperation] = []
 
         # 1. Delete VM-only service keys from SYSTEM hive

@@ -281,7 +281,8 @@ class SystemContentPopulator(BaseService):
         username = ctx.identity_bundle.user.username
         profile_type = ctx.persona.profile_archetype
         seed = ctx.identity_bundle.user.computer_name
-        rng = Random(hash(seed + "syscontent"))
+        rng = (ctx.scheduler.child_rng("SystemContentPopulator")
+               if ctx.scheduler else Random(hash(seed + "syscontent")))
 
         created = 0
 

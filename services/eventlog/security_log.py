@@ -124,6 +124,9 @@ class SecurityLog(BaseService):
         computer_name = ctx.identity_bundle.user.computer_name
         domain = computer_name
 
+        base_rng = (ctx.scheduler.child_rng("SecurityLog")
+                    if ctx.scheduler is not None else None)
+
         if ctx.scheduler is not None:
             login_events = ctx.scheduler.events_of("LOGIN")
             logoff_events = ctx.scheduler.events_of("LOGOFF")
@@ -143,7 +146,7 @@ class SecurityLog(BaseService):
                 all_records.extend(
                     self.build_records(
                         profile_type, username, computer_name, domain,
-                        boot_ts, logoff_ts,
+                        boot_ts, logoff_ts, rng=base_rng,
                     )
                 )
         else:
@@ -180,6 +183,7 @@ class SecurityLog(BaseService):
         domain: str,
         boot_time: datetime,
         logoff_time: "Optional[datetime]" = None,
+        rng: "Optional[Random]" = None,
     ) -> List[EvtxRecord]:
         """Build Security log records for one logon→activity→logoff cycle.
 
@@ -193,6 +197,8 @@ class SecurityLog(BaseService):
             boot_time:     UTC logon timestamp.
             logoff_time:   UTC logoff timestamp.  If ``None`` a random
                            session length is used.
+            rng:           Base RNG from the scheduler; mixed with day_seed
+                           for per-day entropy.
 
         Returns:
             Ordered list of :class:`EvtxRecord`.
@@ -201,7 +207,10 @@ class SecurityLog(BaseService):
             boot_time = boot_time.replace(tzinfo=timezone.utc)
 
         day_seed = int(boot_time.timestamp()) & 0xFFFFFFFF
-        rng = Random(hash(computer_name + username + profile_type) ^ day_seed)
+        if rng is None:
+            rng = Random(hash(computer_name + username + profile_type) ^ day_seed)
+        else:
+            rng = Random(rng.randint(0, 2**32 - 1) ^ day_seed)
         records: List[EvtxRecord] = []
         cursor = boot_time
 

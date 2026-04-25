@@ -44,7 +44,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from random import Random
-from typing import Any, Dict, List, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 from services.base_service import BaseService
 from services.eventlog.evtx_writer import EvtxRecord, EvtxWriter, EvtxWriterError
@@ -164,10 +164,13 @@ class UpdateArtifacts(BaseService):
         Raises:
             UpdateArtifactsError: On missing context keys or write failure.
         """
+        base_rng = (ctx.scheduler.child_rng("UpdateArtifacts")
+                    if ctx.scheduler is not None else None)
         self.write_update_artifacts(
             profile_type=ctx.persona.profile_archetype,
             computer_name=ctx.identity_bundle.user.computer_name,
             install_date=ctx.install_time.date(),
+            rng=base_rng,
         )
 
     # -- public API ---------------------------------------------------------
@@ -177,6 +180,7 @@ class UpdateArtifacts(BaseService):
         profile_type: str,
         computer_name: str,
         install_date: datetime,
+        rng: "Optional[Random]" = None,
     ) -> None:
         """Build and write all Windows Update artifacts.
 
@@ -186,6 +190,7 @@ class UpdateArtifacts(BaseService):
             profile_type:  One of ``"home"``, ``"office"``, ``"developer"``.
             computer_name: VM computer name.
             install_date:  UTC datetime of simulated Windows install.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Raises:
             UpdateArtifactsError: On any write failure.
@@ -193,12 +198,12 @@ class UpdateArtifacts(BaseService):
         if install_date.tzinfo is None:
             install_date = install_date.replace(tzinfo=timezone.utc)
 
-        updates = self._select_updates(profile_type, computer_name)
+        updates = self._select_updates(profile_type, computer_name, rng=rng)
         reg_ops = self.build_registry_operations(
             computer_name, install_date, updates
         )
         evtx_records = self.build_evtx_records(
-            computer_name, install_date, updates
+            computer_name, install_date, updates, rng=rng
         )
 
         # Registry writes
@@ -313,6 +318,7 @@ class UpdateArtifacts(BaseService):
         computer_name: str,
         install_date: datetime,
         updates: List[Dict[str, Any]],
+        rng: Optional[Random] = None,
     ) -> List[EvtxRecord]:
         """Build WUA System event log records.
 
@@ -322,6 +328,7 @@ class UpdateArtifacts(BaseService):
             computer_name: VM computer name.
             install_date:  Windows install datetime.
             updates:       Selected KB update records.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Returns:
             Ordered list of :class:`EvtxRecord`.
@@ -329,7 +336,8 @@ class UpdateArtifacts(BaseService):
         if install_date.tzinfo is None:
             install_date = install_date.replace(tzinfo=timezone.utc)
 
-        rng = Random(hash(computer_name))
+        if rng is None:
+            rng = Random(hash(computer_name))
         records: List[EvtxRecord] = []
 
         for update in updates:
@@ -378,18 +386,21 @@ class UpdateArtifacts(BaseService):
         self,
         profile_type: str,
         computer_name: str,
+        rng: Optional[Random] = None,
     ) -> List[Dict[str, Any]]:
         """Select a deterministic subset of KB updates for this profile.
 
         Args:
             profile_type:  Profile type string.
             computer_name: Used as RNG seed for reproducibility.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Returns:
             Subset of update entries from kb_updates.json.
         """
         count = _UPDATES_BY_PROFILE.get(profile_type, 10)
-        rng = Random(hash(computer_name + profile_type))
+        if rng is None:
+            rng = Random(hash(computer_name + profile_type))
         available = list(self._kb_data)
         rng.shuffle(available)
         return available[:min(count, len(available))]

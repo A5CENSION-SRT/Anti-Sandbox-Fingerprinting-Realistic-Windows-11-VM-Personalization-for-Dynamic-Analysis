@@ -480,7 +480,8 @@ class PrefetchService(BaseService):
         seed = ctx.identity_bundle.user.computer_name
         timeline_days = ctx.persona.timeline_days
 
-        rng = Random(hash(seed + profile_type))
+        rng = (ctx.scheduler.child_rng("PrefetchService")
+               if ctx.scheduler else Random(hash(seed + profile_type)))
         prefetch_dir = Path("Windows") / "Prefetch"
         created_files = 0
 

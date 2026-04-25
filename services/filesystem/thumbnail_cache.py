@@ -112,7 +112,8 @@ class ThumbnailCacheService(BaseService):
         profile_type = ctx.persona.profile_archetype
         seed = ctx.identity_bundle.user.computer_name
 
-        rng = Random(hash(seed + profile_type))
+        rng = (ctx.scheduler.child_rng("ThumbnailCacheService")
+               if ctx.scheduler else Random(hash(seed + profile_type)))
         cache_dir = (
             Path("Users") / username / "AppData" / "Local"
             / "Microsoft" / "Windows" / "Explorer"

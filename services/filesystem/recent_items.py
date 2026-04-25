@@ -145,7 +145,8 @@ class RecentItemsService(BaseService):
         profile_type = ctx.persona.profile_archetype
         seed = ctx.identity_bundle.user.computer_name
 
-        rng = Random(hash(seed + profile_type))
+        rng = (ctx.scheduler.child_rng("RecentItemsService")
+               if ctx.scheduler else Random(hash(seed + profile_type)))
         recent_dir = (
             Path("Users") / username / "AppData" / "Roaming"
             / "Microsoft" / "Windows" / "Recent"

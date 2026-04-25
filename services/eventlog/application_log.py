@@ -162,12 +162,16 @@ class ApplicationLog(BaseService):
         expansion = getattr(ctx, "expansion", None)
         evtx_seed = getattr(expansion, "evtx", None) if expansion is not None else None
 
+        base_rng = (ctx.scheduler.child_rng("ApplicationLog")
+                    if ctx.scheduler is not None else None)
+
         if evtx_seed is not None and evtx_seed.application_events:
             self._write_from_seed(
                 seed=evtx_seed,
                 computer_name=ctx.identity_bundle.user.computer_name,
                 install_time=ctx.install_time,
                 timeline_days=ctx.persona.timeline_days,
+                rng=base_rng,
             )
         else:
             self.write_application_log(
@@ -175,6 +179,7 @@ class ApplicationLog(BaseService):
                 computer_name=ctx.identity_bundle.user.computer_name,
                 username=ctx.identity_bundle.user.username,
                 install_time=ctx.install_time,
+                rng=base_rng,
             )
 
     # -- public API ---------------------------------------------------------
@@ -185,6 +190,7 @@ class ApplicationLog(BaseService):
         computer_name: str,
         username: str,
         install_time: datetime,
+        rng: "Optional[Random]" = None,
     ) -> None:
         """Build and write the Application.evtx file.
 
@@ -193,12 +199,13 @@ class ApplicationLog(BaseService):
             computer_name: VM computer name.
             username:      Windows username.
             install_time:  UTC reference time for MSI install events.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Raises:
             ApplicationLogError: On write failure.
         """
         records = self.build_records(
-            profile_type, computer_name, username, install_time
+            profile_type, computer_name, username, install_time, rng=rng
         )
         try:
             self._evtx_writer.write_records(records, _APPLICATION_EVTX)
@@ -225,6 +232,7 @@ class ApplicationLog(BaseService):
         computer_name: str,
         username: str,
         install_time: datetime,
+        rng: "Optional[Random]" = None,
     ) -> List[EvtxRecord]:
         """Build all Application log records without writing.
 
@@ -235,6 +243,7 @@ class ApplicationLog(BaseService):
             computer_name: VM computer name.
             username:      Windows username.
             install_time:  UTC reference time for MSI events.
+            rng:           Optional scheduler-derived RNG for determinism.
 
         Returns:
             Ordered list of :class:`EvtxRecord`.
@@ -242,7 +251,8 @@ class ApplicationLog(BaseService):
         if install_time.tzinfo is None:
             install_time = install_time.replace(tzinfo=timezone.utc)
 
-        rng = Random(hash(computer_name + username + profile_type))
+        if rng is None:
+            rng = Random(hash(computer_name + username + profile_type))
         records: List[EvtxRecord] = []
         cursor = install_time
 
@@ -280,6 +290,7 @@ class ApplicationLog(BaseService):
         computer_name: str,
         install_time: datetime,
         timeline_days: int,
+        rng: "Optional[Random]" = None,
     ) -> None:
         """Write Application.evtx records driven by an EvtxSeed.
 
@@ -291,8 +302,10 @@ class ApplicationLog(BaseService):
             computer_name: VM computer name for the Computer XML element.
             install_time:  Start of the simulated timeline (UTC).
             timeline_days: Length of the timeline in days.
+            rng:           Optional scheduler-derived RNG for determinism.
         """
-        rng = Random(hash(computer_name + seed.seed_id))
+        if rng is None:
+            rng = Random(hash(computer_name + seed.seed_id))
         if install_time.tzinfo is None:
             install_time = install_time.replace(tzinfo=timezone.utc)
 

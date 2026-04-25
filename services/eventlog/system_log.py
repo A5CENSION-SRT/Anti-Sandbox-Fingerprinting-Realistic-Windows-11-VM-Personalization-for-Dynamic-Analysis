@@ -147,6 +147,9 @@ class SystemLog(BaseService):
         profile_type = ctx.persona.profile_archetype
         computer_name = ctx.identity_bundle.user.computer_name
 
+        base_rng = (ctx.scheduler.child_rng("SystemLog")
+                    if ctx.scheduler is not None else None)
+
         if ctx.scheduler is not None:
             login_events = ctx.scheduler.events_of("LOGIN")
             logoff_events = ctx.scheduler.events_of("LOGOFF")
@@ -162,7 +165,8 @@ class SystemLog(BaseService):
                 logoff_list = logoff_by_day.get(day_key, [])
                 logoff_ts = logoff_list[0] if logoff_list else None
                 all_records.extend(
-                    self.build_records(profile_type, computer_name, boot_ts, logoff_ts)
+                    self.build_records(profile_type, computer_name, boot_ts, logoff_ts,
+                                       rng=base_rng)
                 )
         else:
             all_records = self.build_records(
@@ -194,6 +198,7 @@ class SystemLog(BaseService):
         computer_name: str,
         boot_time: datetime,
         logoff_time: "Optional[datetime]" = None,
+        rng: "Optional[Random]" = None,
     ) -> List[EvtxRecord]:
         """Build System log records for one boot→runtime→shutdown cycle.
 
@@ -205,6 +210,8 @@ class SystemLog(BaseService):
             boot_time:     UTC boot timestamp.
             logoff_time:   UTC logoff/shutdown timestamp.  If ``None`` a
                            random session length (4–10 h) is used.
+            rng:           Base RNG from the scheduler; mixed with day_seed
+                           for per-day entropy.
 
         Returns:
             Ordered list of :class:`EvtxRecord`.
@@ -213,7 +220,10 @@ class SystemLog(BaseService):
             boot_time = boot_time.replace(tzinfo=timezone.utc)
 
         day_seed = int(boot_time.timestamp()) & 0xFFFFFFFF
-        rng = Random(hash(computer_name + profile_type) ^ day_seed)
+        if rng is None:
+            rng = Random(hash(computer_name + profile_type) ^ day_seed)
+        else:
+            rng = Random(rng.randint(0, 2**32 - 1) ^ day_seed)
         records: List[EvtxRecord] = []
         cursor = boot_time
 

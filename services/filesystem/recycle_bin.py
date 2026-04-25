@@ -113,7 +113,8 @@ class RecycleBinService(BaseService):
         seed = ctx.identity_bundle.user.computer_name
         user_sid = self._generate_sid(username, seed)
 
-        rng = Random(hash(seed + profile_type))
+        rng = (ctx.scheduler.child_rng("RecycleBinService")
+               if ctx.scheduler else Random(hash(seed + profile_type)))
         recycle_dir = Path("$Recycle.Bin") / user_sid
         created_files = 0
 

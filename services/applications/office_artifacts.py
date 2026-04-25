@@ -135,7 +135,8 @@ class OfficeArtifacts(BaseService):
             logger.debug("No Office apps in profile — skipping OfficeArtifacts")
             return
 
-        rng = Random(hash(seed + profile))
+        rng = (ctx.scheduler.child_rng("OfficeArtifacts")
+               if ctx.scheduler else Random(hash(seed + profile)))
         user_root = os.path.join("Users", username)
 
         self._create_office_dirs(user_root)
