@@ -180,11 +180,19 @@ def merge_cli_args(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     if args.output:
         merged["mount_path"] = str(args.output)
 
-    if args.profile:
+    # --preset overrides an explicit --profile
+    if getattr(args, "preset", None):
+        preset_path = Path("profiles") / "presets" / f"{args.preset}.yaml"
+        merged["profile_path"] = str(preset_path)
+        merged["profiles_dir"] = "profiles/presets"
+    elif args.profile:
         merged["profile_path"] = str(args.profile)
 
     if args.timeline_days:
         merged["timeline_days"] = args.timeline_days
+
+    if getattr(args, "random_seed", None) is not None:
+        merged["random_seed"] = args.random_seed
 
     if args.override_username:
         merged["override_username"] = args.override_username
@@ -280,14 +288,29 @@ def parse_args() -> argparse.Namespace:
         "-p", "--profile",
         type=Path,
         default=None,
-        help="Path to an AI-generated persona YAML (from profiles/generated/)",
+        help="Path to an explicit persona YAML file",
+    )
+
+    parser.add_argument(
+        "--preset",
+        type=str,
+        choices=["developer", "office_user", "home_user"],
+        default=None,
+        help="Load a built-in preset persona (profiles/presets/)",
     )
 
     parser.add_argument(
         "--timeline-days",
         type=int,
         default=None,
-        help="Number of days of artifact history to generate (default: 90)",
+        help="Number of days of artifact history to generate (default: 360)",
+    )
+
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=None,
+        help="Fixed RNG seed for byte-identical reproducibility (ADR-012)",
     )
 
     parser.add_argument(
@@ -323,13 +346,6 @@ def parse_args() -> argparse.Namespace:
         "-v", "--verbose",
         action="store_true",
         help="Enable verbose (DEBUG) logging",
-    )
-
-    parser.add_argument(
-        "--vm-name",
-        type=str,
-        default=None,
-        help="Target Hyper-V VM Name to stop and start automatically",
     )
 
     parser.add_argument(
@@ -435,6 +451,94 @@ def run_interactive_wizard(args: argparse.Namespace) -> argparse.Namespace:
 
 
 # ---------------------------------------------------------------------------
+# AI persona builder (single path — replaces dead AIOrchestrator block)
+# ---------------------------------------------------------------------------
+
+def _build_ai_persona(
+    args: argparse.Namespace,
+    config: Dict[str, Any],
+    logger: logging.Logger,
+) -> int:
+    """Generate a PersonaContext via Gemini and wire the path into config.
+
+    Returns 0 on success, non-zero on failure.
+    """
+    import os
+    import time as _time
+
+    occupation = getattr(args, "occupation", None)
+    if not occupation:
+        print("\nError: --occupation is required for AI generation.")
+        print("Example: python main.py --ai-generate --occupation 'Software Engineer'")
+        return 2
+
+    api_key = os.environ.get("GEMINI_API_KEY") or config.get("ai", {}).get("gemini", {}).get("api_key")
+    if not api_key:
+        print("\nError: GEMINI_API_KEY not set. Export it or add to config.yaml.")
+        return 2
+
+    try:
+        from services.ai.gemini_client import GeminiClient
+        from services.ai.persona_generator import PersonaGenerator
+
+        gemini_cfg = config.get("ai", {}).get("gemini", {})
+        client = GeminiClient(
+            api_key=api_key,
+            model=gemini_cfg.get("model", "gemini-2.0-flash"),
+            temperature=gemini_cfg.get("temperature", 0.7),
+        )
+        generator = PersonaGenerator(client)
+
+        hints_parts = []
+        if getattr(args, "location", None):
+            hints_parts.append(f"location: {args.location}")
+        if getattr(args, "interests", None):
+            hints_parts.append(f"interests: {', '.join(args.interests)}")
+
+        print(f"\n{'='*60}")
+        print(" AI Persona Generation (Gemini)")
+        print(f"{'='*60}")
+        print(f" Occupation : {occupation}")
+        if hints_parts:
+            print(f" Hints      : {'; '.join(hints_parts)}")
+        print(f"{'='*60}\n")
+
+        t0 = _time.perf_counter()
+        persona = generator.generate(
+            occupation=occupation,
+            location=getattr(args, "location", "United States"),
+            hints="; ".join(hints_parts) if hints_parts else occupation,
+        )
+        elapsed_ms = (_time.perf_counter() - t0) * 1000
+
+        print(f" Generated  : {persona.full_name} ({persona.username})")
+        print(f" Org        : {persona.organization}")
+        print(f" Archetype  : {persona.profile_archetype}")
+        print(f" Time       : {elapsed_ms:.1f}ms\n")
+
+        # Persist persona so Orchestrator.initialize() can load it
+        out_dir = Path(config.get("profiles_dir", "profiles/generated"))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{persona.username}.yaml"
+
+        import yaml as _yaml
+        with out_path.open("w", encoding="utf-8") as fh:
+            _yaml.safe_dump(persona.model_dump(), fh, allow_unicode=True, sort_keys=False)
+
+        config["profile_path"] = str(out_path)
+        if not args.override_username:
+            config["override_username"] = persona.username
+
+        logger.info("AI persona saved: %s", out_path)
+        return 0
+
+    except Exception as exc:
+        logger.error("AI persona generation failed: %s", exc)
+        print(f"\nAI generation failed: {exc}")
+        return 1
+
+
+# ---------------------------------------------------------------------------
 # Main Entry Point
 # ---------------------------------------------------------------------------
 
@@ -462,85 +566,14 @@ def main() -> int:
         config = merge_cli_args(config, args)
         
         # ---------------------------------------------------------------------------
-        # AI Profile Generation Mode
+        # Persona build — AI-generate or preset/explicit YAML
         # ---------------------------------------------------------------------------
-        if getattr(args, 'ai_generate', False):
-            logger.info("AI Profile Generation Mode enabled")
-            
-            occupation = getattr(args, 'occupation', None)
-            if not occupation:
-                logger.error("--occupation is required when using --ai-generate")
-                print("\nError: --occupation is required for AI generation.")
-                print("Example: python main.py --ai-generate --occupation 'Software Engineer'")
-                return 2
-            
-            try:
-                from services.ai.ai_orchestrator import AIOrchestrator
-                
-                # Create AI orchestrator
-                ai_output_dir = Path(config.get("profiles_dir", "profiles/generated"))
-                ai_orchestrator = AIOrchestrator.from_config(config, output_dir=ai_output_dir)
-                
-                print(f"\n{'='*60}")
-                print(" AI Profile Generation")
-                print(f"{'='*60}")
-                print(f" Occupation: {occupation}")
-                if args.location:
-                    print(f" Location:   {args.location}")
-                if args.interests:
-                    print(f" Interests:  {', '.join(args.interests)}")
-                print(f"{'='*60}\n")
-                
-                # Generate profile
-                result = ai_orchestrator.generate_profile(
-                    occupation=occupation,
-                    location=getattr(args, 'location', None),
-                    interests=getattr(args, 'interests', None),
-                )
-                
-                if result.success:
-                    print(f"\nGenerated persona : {result.persona.full_name}")
-                    print(f"  Username        : {result.persona.username}")
-                    print(f"  Organization    : {result.persona.organization}")
+        if getattr(args, "ai_generate", False):
+            rc = _build_ai_persona(args, config, logger)
+            if rc != 0:
+                return rc
 
-                    if result.profile_path:
-                        print(f"  Profile saved to: {result.profile_path}")
-                        
-                        # Update config to use the generated profile in orchestrator.
-                        generated_profile_path = Path(result.profile_path).resolve()
-                        config["profile_path"] = str(generated_profile_path)
-
-                        profiles_root = Path(config.get("profiles_dir", "profiles")).resolve()
-                        if generated_profile_path.is_relative_to(profiles_root):
-                            relative_profile = generated_profile_path.relative_to(profiles_root).with_suffix("")
-                            config["profiles_dir"] = str(profiles_root)
-                            config["profile_name"] = relative_profile.as_posix()
-                        else:
-                            config["profiles_dir"] = str(generated_profile_path.parent)
-                            config["profile_name"] = generated_profile_path.stem
-                        
-                        # Also override username if not already set
-                        if not args.override_username:
-                            config["override_username"] = result.persona.username
-                    
-                    print(f"\n  Generation time: {result.generation_time_ms:.1f}ms")
-                    print(f"\n{'='*60}")
-                    print(" Continuing with artifact generation using AI profile...")
-                    print(f"{'='*60}\n")
-                else:
-                    logger.error("AI profile generation failed: %s", result.errors)
-                    print("\nAI generation failed:")
-                    for err in result.errors:
-                        print(f"  - {err}")
-                    return 1
-                    
-            except ImportError as e:
-                logger.error("AI modules not available: %s", e)
-                print(f"\nError: AI modules not available. Install dependencies:")
-                print("  pip install google-generativeai pydantic jinja2")
-                return 2
-        
-        # VHDX direct-injection requires VMManager (Phase 8)
+        # VHDX direct-injection — uses LinuxMountBackend (Phase 8)
         if args.vhdx_path:
             logger.warning(
                 "VHDX injection (--vhdx-path) is not yet implemented in this build. "

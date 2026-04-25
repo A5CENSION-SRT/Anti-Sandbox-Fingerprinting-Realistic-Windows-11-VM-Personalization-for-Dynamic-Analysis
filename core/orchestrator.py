@@ -300,16 +300,11 @@ class Orchestrator:
             mount_path.mkdir(parents=True, exist_ok=True)
             self._mount_manager = MountManager(str(mount_path))
 
-            # Load PersonaContext from AI-generated YAML
+            # Load PersonaContext from YAML — preset or AI-generated
             raw_path = self._config.get("profile_path")
             if not raw_path:
-                profiles_dir = Path(self._config.get("profiles_dir", "profiles/generated"))
-                profile_name = self._config.get("profile_name", "")
-                if not profile_name:
-                    raise OrchestrationError(
-                        "No profile_path or profile_name in config. "
-                        "Run arc_wizard.py to generate a persona first."
-                    )
+                profiles_dir = Path(self._config.get("profiles_dir", "profiles/presets"))
+                profile_name = self._config.get("profile_name", "home_user")
                 raw_path = str(profiles_dir / f"{profile_name}.yaml")
             try:
                 persona = load_yaml(Path(raw_path))
@@ -346,13 +341,18 @@ class Orchestrator:
             install_time = now - timedelta(days=persona.timeline_days + 30)
             boot_time = now - timedelta(hours=2)
 
-            # Typed execution context
-            rng = _random_mod.Random(hash(seed))
+            # Deterministic RNG — honours --random-seed for ADR-012
+            random_seed = self._config.get("random_seed")
+            if random_seed is not None:
+                base_seed = int(random_seed)
+            else:
+                base_seed = hash(seed) & 0xFFFFFFFF
+            rng = _random_mod.Random(base_seed)
             scheduler = EventScheduler(
                 persona=persona,
                 install_time=install_time,
                 now=now,
-                rng=_random_mod.Random(hash(seed + "-scheduler")),
+                rng=_random_mod.Random(base_seed ^ 0xDEADBEEF),
             )
             self._ctx = ServiceContext(
                 persona=persona,

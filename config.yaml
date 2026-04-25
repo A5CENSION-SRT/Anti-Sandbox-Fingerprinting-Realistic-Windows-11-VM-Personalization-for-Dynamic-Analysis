@@ -5,8 +5,8 @@
 mount_path: "./output"
 
 # Profile configuration
-profiles_dir: "profiles/generated"
-profile_name: ""
+profiles_dir: "profiles/presets"
+profile_name: "home_user"
 
 # Data directory (contains hardware_models.json, wordlists, etc.)
 data_dir: "data"
