@@ -34,79 +34,88 @@ _requires_hivex = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 
 def _create_minimal_hive(path: Path, hive_name: str = "SOFTWARE") -> None:
-    """Create a minimal but valid registry hive that regipy can parse.
+    """Create a minimal but valid registry hive for use in tests.
 
-    Produces a regf header + one hbin containing only the root NK cell.
-    The hive has zero subkeys and zero values — it is structurally valid
-    but empty.
+    Produces a regf header + one hbin with a root NK cell and a valid SK
+    cell. The SK cell is required by hivex_node_add_child: it reads
+    parent_nk->sk, adds 0x1000, and validates the block before creating
+    any child key.
     """
-    header = bytearray(4096)
+    _HIVE_HDR = 4096
+    _HBIN_HDR = 32
+    _NK_FIXED = 80   # NK fixed header including work_var at +72
 
-    # regf signature + sequence numbers
-    header[0:4] = b"regf"
-    struct.pack_into("<I", header, 4, 1)   # primary seq
-    struct.pack_into("<I", header, 8, 1)   # secondary seq
-    struct.pack_into("<Q", header, 12, 132000000000000000)  # timestamp
-    struct.pack_into("<I", header, 20, 1)  # major version
-    struct.pack_into("<I", header, 24, 3)  # minor version
-    struct.pack_into("<I", header, 28, 0)  # file type (primary)
-    struct.pack_into("<I", header, 32, 1)  # file format
-    struct.pack_into("<I", header, 36, 32)  # root key offset in hbin
-    struct.pack_into("<I", header, 40, 4096)  # hive bins data size
-    struct.pack_into("<I", header, 44, 1)  # clustering factor
+    bin_data_size = 4096
+    hive_data = bytearray(_HIVE_HDR + bin_data_size)
 
-    name_bytes = hive_name.encode("utf-16-le")[:62]
-    header[48:48 + len(name_bytes)] = name_bytes
-
-    # Checksum = XOR of first 508 bytes
+    # ── regf header ────────────────────────────────────────────────────
+    struct.pack_into("<4s", hive_data, 0, b"regf")
+    struct.pack_into("<I", hive_data, 4, 1)               # primary seq
+    struct.pack_into("<I", hive_data, 8, 1)               # secondary seq
+    struct.pack_into("<Q", hive_data, 12, 0)              # last written ts
+    struct.pack_into("<I", hive_data, 20, 1)              # major version
+    struct.pack_into("<I", hive_data, 24, 5)              # minor version
+    struct.pack_into("<I", hive_data, 28, 0)              # type (primary)
+    struct.pack_into("<I", hive_data, 32, 1)              # format
+    struct.pack_into("<I", hive_data, 36, 32)             # root cell offset in hbins
+    struct.pack_into("<I", hive_data, 40, bin_data_size)  # hive bins data size
+    struct.pack_into("<I", hive_data, 44, 1)              # clustering factor
+    name_bytes = hive_name.encode("utf-16-le")[:64]
+    hive_data[48:48 + len(name_bytes)] = name_bytes
     checksum = 0
     for i in range(0, 508, 4):
-        checksum ^= struct.unpack_from("<I", header, i)[0]
-    struct.pack_into("<I", header, 508, checksum)
+        checksum ^= struct.unpack_from("<I", hive_data, i)[0]
+    struct.pack_into("<I", hive_data, 508, checksum)
 
-    # hbin block (4096 bytes)
-    hbin = bytearray(4096)
-    hbin[0:4] = b"hbin"
-    struct.pack_into("<I", hbin, 4, 0)      # offset
-    struct.pack_into("<I", hbin, 8, 4096)   # hbin size
-    struct.pack_into("<Q", hbin, 20, 132000000000000000)
+    # ── hbin header ────────────────────────────────────────────────────
+    hbin_off = _HIVE_HDR
+    struct.pack_into("<4s", hive_data, hbin_off, b"hbin")
+    struct.pack_into("<I", hive_data, hbin_off + 4, 0)
+    struct.pack_into("<I", hive_data, hbin_off + 8, bin_data_size)
 
-    # Root NK cell at offset 32
-    key_name = b"CMI-CreateHive{2A7FB991-7BBE-4F9D-B91E-7CB51D4737F5}"
-    nk_size = (76 + len(key_name) + 7) & ~7  # 8-byte aligned
-    nk_cell_start = 32
+    # ── Root NK cell (80-byte fixed header) ────────────────────────────
+    cell_off = hbin_off + _HBIN_HDR
+    root_name = b"CMI-CreateHive{2A7FB991-7BBE-4F9D-B91E-7CB51D4737F5}"
+    cell_size = _NK_FIXED + len(root_name)
+    struct.pack_into("<i", hive_data, cell_off, -cell_size)
+    struct.pack_into("<2s", hive_data, cell_off + 4, b"nk")
+    struct.pack_into("<H", hive_data, cell_off + 6, 0x0020)   # KEY_HIVE_ENTRY
+    struct.pack_into("<I", hive_data, cell_off + 20, 0xFFFFFFFF)  # parent
+    struct.pack_into("<I", hive_data, cell_off + 32, 0xFFFFFFFF)  # subkeys stable
+    struct.pack_into("<I", hive_data, cell_off + 36, 0xFFFFFFFF)  # subkeys volatile
+    struct.pack_into("<I", hive_data, cell_off + 44, 0xFFFFFFFF)  # values list
+    struct.pack_into("<I", hive_data, cell_off + 52, 0xFFFFFFFF)  # class name
+    # sk field (offset 48) will be filled in after SK cell is placed
+    struct.pack_into("<I", hive_data, cell_off + 72, 0)        # work_var (spare)
+    struct.pack_into("<H", hive_data, cell_off + 76, len(root_name))
+    struct.pack_into("<H", hive_data, cell_off + 78, 0)        # class name len
+    hive_data[cell_off + 80:cell_off + 80 + len(root_name)] = root_name
 
-    struct.pack_into("<i", hbin, nk_cell_start, -nk_size)  # allocated
+    # ── SK (Security Key) cell — required by hivex_node_add_child ──────
+    sk_cell_off = cell_off + cell_size
+    sk_rel = sk_cell_off - _HIVE_HDR    # relative to hive bins start
+    sec_desc = bytearray(20)
+    sec_desc[0] = 1
+    struct.pack_into("<H", sec_desc, 2, 0x8004)  # SE_SELF_RELATIVE | SE_DACL_PRESENT
+    sk_size = ((24 + len(sec_desc) + 7) // 8) * 8
+    struct.pack_into("<i", hive_data, sk_cell_off, -sk_size)
+    struct.pack_into("<2s", hive_data, sk_cell_off + 4, b"sk")
+    struct.pack_into("<I", hive_data, sk_cell_off + 8, sk_rel)   # sk_prev → self
+    struct.pack_into("<I", hive_data, sk_cell_off + 12, sk_rel)  # sk_next → self
+    struct.pack_into("<I", hive_data, sk_cell_off + 16, 0)       # refcount
+    struct.pack_into("<I", hive_data, sk_cell_off + 20, len(sec_desc))
+    hive_data[sk_cell_off + 24:sk_cell_off + 24 + len(sec_desc)] = sec_desc
+    # Point root NK sk field at this cell
+    struct.pack_into("<I", hive_data, cell_off + 48, sk_rel)
 
-    nk = nk_cell_start + 4
-    hbin[nk:nk + 2] = b"nk"
-    struct.pack_into("<H", hbin, nk + 2, 0x0024)  # KEY_HIVE_ENTRY|COMP_NAME
-    struct.pack_into("<Q", hbin, nk + 4, 132000000000000000)
-    struct.pack_into("<I", hbin, nk + 12, 0)          # access_bits
-    struct.pack_into("<i", hbin, nk + 16, -1)         # parent offset
-    struct.pack_into("<I", hbin, nk + 20, 0)          # subkey_count
-    struct.pack_into("<I", hbin, nk + 24, 0)          # volatile_subkey_count
-    struct.pack_into("<I", hbin, nk + 28, 0xFFFFFFFF)  # subkeys_list_offset
-    struct.pack_into("<I", hbin, nk + 32, 0xFFFFFFFF)
-    struct.pack_into("<I", hbin, nk + 36, 0)          # values_count
-    struct.pack_into("<I", hbin, nk + 40, 0xFFFFFFFF)  # values_list_offset
-    struct.pack_into("<I", hbin, nk + 44, 0xFFFFFFFF)  # security
-    struct.pack_into("<I", hbin, nk + 48, 0xFFFFFFFF)  # class_name
-    struct.pack_into("<I", hbin, nk + 52, 0)
-    struct.pack_into("<I", hbin, nk + 56, 0)
-    struct.pack_into("<I", hbin, nk + 60, 0)
-    struct.pack_into("<I", hbin, nk + 64, 0)
-    struct.pack_into("<I", hbin, nk + 68, 0)
-    struct.pack_into("<H", hbin, nk + 72, len(key_name))
-    struct.pack_into("<H", hbin, nk + 74, 0)
-    hbin[nk + 76:nk + 76 + len(key_name)] = key_name
+    # ── Free cell for remaining space ───────────────────────────────────
+    used = _HBIN_HDR + cell_size + sk_size
+    free_off = hbin_off + used
+    remaining = bin_data_size - used
+    if remaining > 4:
+        struct.pack_into("<i", hive_data, free_off, remaining)
 
-    # Free cell filling the rest
-    free_start = nk_cell_start + nk_size
-    free_size = 4096 - free_start
-    struct.pack_into("<i", hbin, free_start, free_size)
-
-    path.write_bytes(bytes(header) + bytes(hbin))
+    path.write_bytes(bytes(hive_data))
 
 
 def _make_op(**overrides: Any) -> HiveOperation:

@@ -65,7 +65,6 @@ _SERVICE_MODULES = {
         ("services.filesystem.installed_apps_stub", "InstalledAppsStub"),
         ("services.filesystem.document_generator", "DocumentGenerator"),
         ("services.filesystem.media_stub", "MediaStubService"),
-        ("services.filesystem.office_mru", "OfficeMruService"),
         ("services.filesystem.powershell_history", "PowerShellHistoryService"),
         ("services.filesystem.cdp_logs", "CdpLogsService"),
         ("services.filesystem.prefetch", "PrefetchService"),
@@ -75,6 +74,7 @@ _SERVICE_MODULES = {
     ],
     "registry": [
         ("services.registry.hive_writer", "HiveWriter"),
+        ("services.filesystem.office_mru", "OfficeMruService"),
         ("services.registry.installed_programs", "InstalledPrograms"),
         ("services.registry.mru_recentdocs", "MruRecentDocs"),
         ("services.registry.network_profiles", "NetworkProfiles"),

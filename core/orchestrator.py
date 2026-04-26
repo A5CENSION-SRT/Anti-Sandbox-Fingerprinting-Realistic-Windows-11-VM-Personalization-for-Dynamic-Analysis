@@ -185,7 +185,7 @@ _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     "InstalledAppsStub": ExecutionPhase.FILESYSTEM,
     "DocumentGenerator": ExecutionPhase.FILESYSTEM,
     "MediaStubService": ExecutionPhase.FILESYSTEM,
-    "OfficeMruService": ExecutionPhase.FILESYSTEM,
+    "OfficeMruService": ExecutionPhase.REGISTRY,
     "PowerShellHistoryService": ExecutionPhase.FILESYSTEM,
     "CdpLogsService": ExecutionPhase.FILESYSTEM,
     "PrefetchService": ExecutionPhase.FILESYSTEM,
@@ -193,8 +193,8 @@ _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     "RecentItemsService": ExecutionPhase.FILESYSTEM,
     "RecycleBinService": ExecutionPhase.FILESYSTEM,
     "CrossWriter": ExecutionPhase.FILESYSTEM,
+    "HiveWriter": ExecutionPhase.FILESYSTEM,
     # Registry
-    "HiveWriter": ExecutionPhase.REGISTRY,
     "InstalledPrograms": ExecutionPhase.REGISTRY,
     "MruRecentDocs": ExecutionPhase.REGISTRY,
     "NetworkProfiles": ExecutionPhase.REGISTRY,
@@ -430,6 +430,7 @@ class Orchestrator:
             "Windows/System32/config/SAM": "SAM",
             "Windows/System32/config/SECURITY": "SECURITY",
             "Windows/System32/config/DEFAULT": "DEFAULT",
+            "Windows/System32/config/HARDWARE": "HARDWARE",
             # User hive
             f"Users/{username}/NTUSER.DAT": "NTUSER.DAT",
         }

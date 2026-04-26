@@ -274,7 +274,7 @@ class HiveWriter(BaseService):
         for val in h.node_values(node):
             if h.value_key(val) == value_name:
                 typ, _ = h.value_type(val)
-                raw = h.value_value(val)
+                _, raw = h.value_value(val)
                 return self._decode_raw(typ, raw)
         raise HiveWriterError(
             f"Value '{value_name}' not found at {key_path} in {hive_abs.name}"
@@ -283,13 +283,13 @@ class HiveWriter(BaseService):
     @staticmethod
     def _decode_raw(typ: int, raw: bytes) -> Any:
         if typ in (1, 2):  # REG_SZ, REG_EXPAND_SZ
-            return raw.rstrip(b"\x00").decode("utf-16-le", errors="replace")
+            return raw.decode("utf-16-le", errors="replace").rstrip("\x00")
         if typ == 4:  # REG_DWORD
             return struct.unpack_from("<I", raw)[0] if len(raw) >= 4 else 0
         if typ == 11:  # REG_QWORD
             return struct.unpack_from("<Q", raw)[0] if len(raw) >= 8 else 0
         if typ == 7:  # REG_MULTI_SZ
-            text = raw.rstrip(b"\x00").decode("utf-16-le", errors="replace")
+            text = raw.decode("utf-16-le", errors="replace").rstrip("\x00")
             return [s for s in text.split("\x00") if s]
         return raw  # REG_BINARY, REG_NONE, etc.
 
@@ -298,7 +298,10 @@ class HiveWriter(BaseService):
     def _apply_operations_to_hive(
         self, hive_abs: Path, operations: List[HiveOperation]
     ) -> None:
-        h = _hivex.Hivex(str(hive_abs), write=True)
+        try:
+            h = _hivex.Hivex(str(hive_abs), write=True)
+        except Exception as exc:
+            raise HiveWriterError(f"Cannot open hive {hive_abs.name}: {exc}") from exc
         try:
             for op in operations:
                 try:
