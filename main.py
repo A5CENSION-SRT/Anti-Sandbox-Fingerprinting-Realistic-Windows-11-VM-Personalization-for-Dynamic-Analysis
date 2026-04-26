@@ -57,6 +57,9 @@ _DEFAULT_OUTPUT = "./output"
 
 # Service imports - lazy loaded to avoid circular imports
 _SERVICE_MODULES = {
+    "expansion": [
+        ("services.expansion.orchestrator", "ExpansionOrchestrator"),
+    ],
     "filesystem": [
         ("services.filesystem.user_directory", "UserDirectoryService"),
         ("services.filesystem.installed_apps_stub", "InstalledAppsStub"),
@@ -200,6 +203,9 @@ def merge_cli_args(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str
     if args.override_hostname:
         merged["override_hostname"] = args.override_hostname
 
+    if getattr(args, "skip_anti_fingerprint", False):
+        merged["skip_anti_fingerprint"] = True
+
     return merged
 
 
@@ -210,12 +216,14 @@ def merge_cli_args(config: Dict[str, Any], args: argparse.Namespace) -> Dict[str
 def register_services(
     orchestrator: Orchestrator,
     categories: Optional[list] = None,
+    config: Optional[Dict[str, Any]] = None,
 ) -> int:
     """Dynamically import and register services with the orchestrator.
 
     Args:
         orchestrator: Orchestrator instance.
         categories: List of service categories to load. If None, load all.
+        config: Merged configuration dict (used to check feature flags).
 
     Returns:
         Number of services registered.
@@ -224,8 +232,12 @@ def register_services(
 
     logger = logging.getLogger(__name__)
     registered = 0
+    config = config or {}
 
     categories = categories or list(_SERVICE_MODULES.keys())
+
+    if config.get("skip_anti_fingerprint"):
+        categories = [c for c in categories if c != "anti_fingerprint"]
 
     for category in categories:
         if category not in _SERVICE_MODULES:
@@ -325,6 +337,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default=None,
         help="Force a specific Windows computer name",
+    )
+
+    parser.add_argument(
+        "--skip-anti-fingerprint",
+        action="store_true",
+        help="Skip VM anti-fingerprint registry scrubbing (for baseline testing)",
     )
 
     parser.add_argument(
@@ -573,13 +591,6 @@ def main() -> int:
             if rc != 0:
                 return rc
 
-        # VHDX direct-injection — uses LinuxMountBackend (Phase 8)
-        if args.vhdx_path:
-            logger.warning(
-                "VHDX injection (--vhdx-path) is not yet implemented in this build. "
-                "Set mount_path in config.yaml to target a pre-mounted drive letter."
-            )
-
         # Initialize audit logger
         audit_path = Path(config.get("audit_log_path", "audit.log"))
         audit_logger = AuditLogger(audit_path)
@@ -593,8 +604,21 @@ def main() -> int:
 
         orchestrator.initialize()
 
+        # VHDX direct-injection — uses LinuxMountBackend (Phase 8)
+        if args.vhdx_path:
+            try:
+                from core.linux_mount import LinuxMountBackend
+                backend = LinuxMountBackend(args.vhdx_path)
+                backend.mount()
+                config["mount_path"] = str(args.vhdx_path)
+                config["_vhdx_backend"] = backend
+                logger.info("VHDX mounted: %s", args.vhdx_path)
+            except Exception as exc:
+                logger.error("Failed to mount VHDX: %s", exc)
+                return 2
+
         # Register services
-        num_services = register_services(orchestrator, args.categories)
+        num_services = register_services(orchestrator, args.categories, config=config)
         logger.info("Registered %d services", num_services)
 
         if num_services == 0:

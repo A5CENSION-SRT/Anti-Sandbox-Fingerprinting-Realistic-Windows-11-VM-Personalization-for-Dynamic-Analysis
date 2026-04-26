@@ -220,7 +220,7 @@ class UsnJournalWriter(BaseService):
             if not rel_path:
                 continue
 
-            event_kind = event.event_type
+            event_kind = event.kind
             reason, attrs = event_types.get(event_kind, (_USN_DATA_OVERWRITE | _USN_CLOSE, 0x20))
 
             filename = Path(rel_path).name

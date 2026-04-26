@@ -107,9 +107,15 @@ class EventScheduler:
             self._events = list(self._generate())
         return self._events
 
-    def events_of(self, kind: EventKind) -> List[SyntheticEvent]:
-        """Return all events of a specific kind."""
-        return [e for e in self.emit() if e.kind == kind]
+    def events_of(self, *kinds: EventKind) -> List[SyntheticEvent]:
+        """Return all events matching one or more kinds.
+
+        If called with a single kind, filters for that kind only.
+        If called with multiple kinds, returns events of any of those kinds,
+        sorted by timestamp.
+        """
+        kind_set = set(kinds)
+        return [e for e in self.emit() if e.kind in kind_set]
 
     @property
     def now(self) -> datetime:

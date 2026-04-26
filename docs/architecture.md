@@ -2,223 +2,198 @@
 
 ## Overview
 
-ARC (Artifact Replication & Calibration) is a Python tool that personalises a
-**mounted Windows 11 image** to resist VM-detection heuristics. It does so by
-writing realistic artefacts — registry keys, event-log records, filesystem
-structures, browser data — that are consistent with a chosen usage profile.
+ARC (Artifact Reality Composer) takes a post-OOBE Windows 11 VHDX and rewrites it offline to
+look like a machine with ~360 days of genuine user activity. The host runs Linux (Ubuntu 24.04+).
+All I/O to the image goes through the libguestfs / hivex / ntfs-3g stack — no PowerShell, no
+Windows dependency, no Z: drive.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│  main.py                                                            │
-│  Parses CLI args, loads config.yaml, constructs Orchestrator,      │
-│  calls orchestrator.run(mount_path)                                 │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-              ┌──────────────▼──────────────┐
-              │  core.Orchestrator          │
-              │  – loads ProfileEngine      │
-              │  – coordinates all services │
-              │  – owns AuditLogger         │
-              └───┬──────────────────┬──────┘
-                  │                  │
-     ┌────────────▼─────┐   ┌────────▼──────────────┐
-     │  ProfileEngine   │   │  IdentityGenerator    │
-     │  YAML deep-merge │   │  Deterministic names, │
-     │  Pydantic valid. │   │  hardware, user data  │
-     └────────────┬─────┘   └────────┬──────────────┘
-                  │                  │
-                  └────────┬─────────┘
-                           │  ProfileContext + IdentityBundle
-                           │
-           ┌───────────────▼────────────────────────────────────────┐
-           │  Services Layer                                         │
-           │                                                         │
-           │  ┌─────────────────────────────────────────────────┐   │
-           │  │  services/registry/                              │   │
-           │  │   SystemIdentity  InstalledPrograms              │   │
-           │  │   NetworkProfiles MruRecentDocs  UserAssist      │   │
-           │  └───────────────────────┬─────────────────────────┘   │
-           │                          │ HiveOperation list           │
-           │                  ┌───────▼────────┐                    │
-           │                  │  HiveWriter    │ ── binary patch ──► │
-           │                  └────────────────┘    NTUSER.DAT /    │
-           │                                        SYSTEM / SAM    │
-           │  ┌─────────────────────────────────────────────────┐   │
-           │  │  services/eventlog/                              │   │
-           │  │   SystemLog  SecurityLog  ApplicationLog         │   │
-           │  │   UpdateArtifacts                                │   │
-           │  └───────────────────────┬─────────────────────────┘   │
-           │                          │ EvtxRecord list              │
-           │                  ┌───────▼────────┐                    │
-           │                  │  EvtxWriter    │ ── binary build ──► │
-           │                  └────────────────┘    System.evtx /   │
-           │                                        Security.evtx   │
-           │  ┌─────────────────────────────────────────────────┐   │
-           │  │  services/anti_fingerprint/                      │   │
-           │  │   VmScrubber  HardwareNormalizer  ProcessFaker   │   │
-           │  └───────────────────────┬─────────────────────────┘   │
-           │                          │ HiveOperation list           │
-           │                  ┌───────▼────────┐                    │
-           │                  │  HiveWriter    │ ── binary patch ──► │
-           │                  └────────────────┘    SYSTEM hive     │
-           │                                                         │
-           │  ┌─────────────────────────────────────────────────┐   │
-           │  │  services/filesystem/  (Sumukha)                 │   │
-           │  │  services/browser/     (Raghottam)               │   │
-           │  │  services/applications/(Raghottam)               │   │
-           │  └─────────────────────────────────────────────────┘   │
-           └───────────────────────────────────────────────────────┘
-                           │
-           ┌───────────────▼───────────────────────────────────────┐
-           │  Mounted Windows 11 Image                             │
-           │  (e.g. /mnt/win11  or  Z:\)                           │
-           └───────────────────────────────────────────────────────┘
+core/persona_context.py    — unified PersonaContext schema (single source of truth)
+core/persona_loader.py     — YAML → PersonaContext; preset or AI-generated path
+core/service_context.py    — typed ServiceContext dataclass threaded through all services
+core/event_scheduler.py    — cross-domain deterministic event stream
+core/linux_mount.py        — LinuxMountBackend: libguestfs + hivex + guestmount
+core/orchestrator.py       — phase runner; owns execution order
+
+services/expansion/        — ExpansionOrchestrator → ExpansionBundle
+services/registry/         — 5 domain services; hivex-backed HiveWriter
+services/browser/          — history, downloads, bookmarks, cookies, CDP logs
+services/filesystem/       — Prefetch, cross_writer, documents, office_mru, ps_history
+services/eventlog/         — evtx_writer + 4 channel services
+services/applications/     — scheduler-aware app-activity services
+services/ntfs/             — mft_timestamp_patcher, usn_journal_writer, logfile_writer
+services/anti_fingerprint/ — VmScrubber, HardwareNormalizer, MacHygiene, ProcessFaker
+
+profiles/presets/          — developer.yaml / office_user.yaml / home_user.yaml
 ```
 
 ---
 
-## Layer Descriptions
+## Unified PersonaContext Schema
 
-### 1. Entry Point (`main.py`)
+`core/persona_context.py` is the single persona schema. It is a frozen Pydantic `BaseModel`
+with `extra="forbid"`. Every field that any service needs is defined here; there is no secondary
+schema and no lossy filter.
 
-- Reads CLI arguments: `--mount` (image mount path), `--profile` (yaml path),
-  `--config` (config.yaml override)
-- Instantiates `Orchestrator` with the resolved config and calls `.run()`
-- Owned by **Sumukha**
-
-### 2. Core Layer (`core/`)
-
-| Module                  | Role                                                                |
-| ----------------------- | ------------------------------------------------------------------- |
-| `orchestrator.py`       | Wires all services; single entry point for a full run               |
-| `profile_engine.py`     | Loads and deep-merges profile YAML files; validates via Pydantic    |
-| `identity_generator.py` | Generates deterministic `IdentityBundle` from a seed                |
-| `timestamp_service.py`  | Produces realistic, chronologically-sorted timestamps               |
-| `audit_logger.py`       | Append-only in-memory log; `entries` property returns list of dicts |
-
-### 3. Services Layer (`services/`)
-
-All services inherit from `services.base_service.BaseService` (ABC):
-
-```
-BaseService
- └── apply(context: dict) → None   # public entry point
-```
-
-Constructor injection: every service receives `HiveWriter` **or** `EvtxWriter`
-plus `AuditLogger` at construction time — never inside `apply()`. This keeps
-services testable in isolation with `MagicMock(spec=HiveWriter)`.
-
-#### `services/registry/`
-
-Writes personalisation data to raw registry hives via `HiveWriter`.
-
-| Service             | Key area                                                             | Notable detail            |
-| ------------------- | -------------------------------------------------------------------- | ------------------------- |
-| `SystemIdentity`    | `HKLM\SYSTEM\ControlSet001\Control\ComputerName`                     | Sets hostname + ProductId |
-| `InstalledPrograms` | `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`           | Profile-specific app list |
-| `NetworkProfiles`   | `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\NetworkList`      | Unique GUID per adapter   |
-| `MruRecentDocs`     | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\RecentDocs` | 15-doc MRU by extension   |
-| `UserAssist`        | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\UserAssist` | ROT-13 encoded app paths  |
-
-#### `services/eventlog/`
-
-Constructs binary-valid EVTX files from scratch via `EvtxWriter`.
-
-| Service           | Log file                 | EIDs                               |
-| ----------------- | ------------------------ | ---------------------------------- |
-| `SystemLog`       | `System.evtx`            | 6005, 6006, 7001, 7036             |
-| `SecurityLog`     | `Security.evtx`          | 4608, 4624, 4634, 4672, 4769, 4907 |
-| `ApplicationLog`  | `Application.evtx`       | 11707, 1000, 1001                  |
-| `UpdateArtifacts` | `System.evtx` + registry | EIDs 19, 20, 43, 44 per KB         |
-
-#### `services/anti_fingerprint/`
-
-Removes VM-indicator strings and writes realistic hardware identifiers.
-
-| Service              | Mechanism                                                                                                         |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `VmScrubber`         | Deletes VM driver/service keys; patches VM strings in hive values                                                 |
-| `HardwareNormalizer` | Writes real-vendor BIOS/motherboard/disk/GPU strings from `data/hardware_models.json`                             |
-| `ProcessFaker`       | Populates 37 real Windows services from `templates/registry/common_services.json`; sets profile-specific Run keys |
-
-### 4. Data & Templates (`data/`, `templates/`)
-
-| Resource                                  | Used by                            |
-| ----------------------------------------- | ---------------------------------- |
-| `data/hardware_models.json`               | `HardwareNormalizer`, `VmScrubber` |
-| `data/kb_updates.json`                    | `UpdateArtifacts`                  |
-| `data/wordlists/`                         | Filesystem, browser services       |
-| `templates/registry/common_services.json` | `ProcessFaker`                     |
-| `templates/browser/`                      | Browser services                   |
-| `templates/documents/`                    | Filesystem services                |
-
-### 5. Profiles (`profiles/`)
-
-```
-profiles/base.yaml          ← merged first
-profiles/home_user.yaml     ← or developer.yaml / office_user.yaml
-```
-
-Deep-merged by `ProfileEngine` using `deepmerge`, then validated by a frozen
-Pydantic `ProfileContext` model. See `docs/profile_schema.md` for field
-definitions.
+`PersonaLoader` (`core/persona_loader.py`) loads a preset YAML or accepts an AI-generated
+`PersonaContext` directly. Validation errors are loud — unknown fields raise `ValidationError`
+immediately. The old `ProfileContext` (6-field) and its silent `allowed_fields` filter are
+deleted (ADR-001).
 
 ---
 
-## Binary I/O Adapters
+## ServiceContext
 
-### `HiveWriter`
+`core/service_context.py` defines the frozen dataclass threaded through every
+`BaseService.apply()`. Key fields: `persona` (PersonaContext), `mount` (MountManager),
+`rng` (Random), `audit` (AuditLogger), `timestamp_service`, `install_time`, `boot_time`,
+`identity_bundle`, `scheduler` (Optional — populated in SCHEDULING phase), `expansion`
+(Optional — populated in EXPANSION phase).
 
-- Reads the existing hive with **regipy** (read-only) to locate cell offsets.
-- Writes new/modified values directly at the binary level (no regipy write API).
-- All changes expressed as a list of `HiveOperation(BaseModel)` objects built by
-  the calling service, then executed atomically.
-
-### `EvtxWriter`
-
-- Produces a binary-valid EVTX from scratch — no dependency on an existing log.
-- Structure: 4096-byte file header (`ElfFile\0`), one or more 65536-byte chunks
-  (`ElfChnk\0`), each containing variable-length records (`**` magic `0x2A2A`).
-- CRC32 checksums computed over header and chunk regions per the EVTX spec.
+No service receives `context: dict`. `ctx.persona.<field>` is the only legal field-access
+pattern (CI grep-gate A2). `frozen=True` prevents services from mutating shared state.
 
 ---
 
-## Key Design Decisions
+## Execution Phases
 
-| Decision                                                    | Rationale                                                          |
-| ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| BaseService ABC + constructor injection                     | Enables full mock-based unit testing without mounting a real image |
-| Deterministic RNG seeded on `(computer_name, profile_type)` | Reproducible runs; same seed → same artefacts                      |
-| Frozen Pydantic models throughout                           | Catch config errors at load time, not mid-run                      |
-| Single `_VM_STRINGS` source in `identity_generator.py`      | One canonical set; `VmScrubber` imports and extends it             |
-| Operation-list pattern (build then execute)                 | Allows dry-run inspection; simplifies error recovery               |
-| AuditLogger as append-only list                             | Zero side-effects during testing; entries queryable after run      |
+```
+INFRASTRUCTURE → EXPANSION → SCHEDULING → FILESYSTEM → REGISTRY → BROWSER
+    → APPLICATIONS → EVENTLOG → ANTI_FINGERPRINT → NTFS → EVALUATION
+```
+
+INFRASTRUCTURE builds identity. EXPANSION runs `ExpansionOrchestrator` and produces the
+`ExpansionBundle`. SCHEDULING constructs `EventScheduler` and pre-emits the full event stream.
+FILESYSTEM through EVENTLOG are the artifact-writing phases — each consumes `ctx.scheduler`
+events of their relevant kinds. ANTI_FINGERPRINT scrubs VM-detection markers. NTFS patches
+`$STANDARD_INFORMATION` timestamps and appends `$UsnJrnl:$J` records for all scheduler
+file-touch events. EVALUATION runs `TemporalCoherenceCheck` and density assertions.
 
 ---
 
-## Data Flow Summary
+## LinuxMountBackend
+
+`core/linux_mount.py::LinuxMountBackend` provides three I/O surfaces:
+
+### libguestfs (general file I/O)
+
+The primary mount path. `mount()` launches the guestfs appliance, inspects the image with
+`inspect_os()`, and mounts all partitions. Services call `read_bytes()`, `write_bytes()`,
+`mkdir_p()`, `utimens()`, `set_ntfs_attributes()`. This covers registry hives, EVTX files, and
+all filesystem artifacts.
+
+```python
+with LinuxMountBackend(Path("windows.vhdx")) as backend:
+    backend.write_bytes("/Users/alexj/Documents/notes.txt", b"content")
+```
+
+### hivex (registry hive writes)
+
+`open_hive(guest_path)` is a context manager that pulls the hive from the image to a host
+tempfile, opens it with `hivex.Hivex(write=True)`, yields a `HivexHandle`, then commits and
+writes the modified hive back. After commit, `.LOG1` and `.LOG2` are deleted so Windows
+does not replay the old transaction log and silently roll back ARC's writes (ADR-010).
+
+```python
+with backend.open_hive("/Windows/System32/config/SOFTWARE") as h:
+    ms = h.h.node_get_child(h.h.root(), "Microsoft")
+```
+
+### guestmount / ntfs-3g FUSE (raw NTFS stream access)
+
+`host_fuse_mount()` runs `guestmount --rw --inspector` and returns a host `Path`. The NTFS
+phase uses this for two operations that libguestfs cannot do cleanly:
+
+- `setfattr -n system.ntfs_times` to patch `$STANDARD_INFORMATION` timestamps.
+- Colon-path stream access for `$Extend\$UsnJrnl:$J` raw appending (ADR-008).
+
+guestfs must be unmounted before the FUSE mount is raised (one writer at a time). The orchestrator
+handles this sequencing between phases 8 and 9.
+
+---
+
+## EventScheduler
+
+`core/event_scheduler.py::EventScheduler` is the single source of time and randomness for all
+services. It walks `[install_time, now]` day by day, emitting `SyntheticEvent` objects for each
+active day (respecting `persona.active_days` and `persona.work_hours_*`). Event counts per
+session are Poisson-distributed.
+
+```python
+@dataclass(frozen=True)
+class SyntheticEvent:
+    kind: Literal["APP_LAUNCH","FILE_CREATE","FILE_MODIFY","FILE_DELETE",
+                  "URL_VISIT","URL_DOWNLOAD","LOGIN","LOGOFF","SYSTEM_UPDATE"]
+    timestamp: datetime  # always UTC
+    payload: dict[str, Any]
+```
+
+Services consume events by kind:
+
+```python
+for event in ctx.scheduler.events_of("APP_LAUNCH"):
+    # write Prefetch entry, EVTX 4688, UserAssist bump
+```
+
+Each service gets a deterministic child RNG:
+
+```python
+rng = ctx.scheduler.child_rng("registry.userassist")
+```
+
+Child RNGs are seeded from `hash(master_seed ^ hash(name))`. Adding or removing a service does
+not affect other services' sequences. Direct `datetime.now()` or `Random(N)` in services is
+banned (CI grep-gate A1, ADR-005, ADR-012).
+
+---
+
+## ExpansionBundle
+
+`services/expansion/` runs in the EXPANSION phase before any artifact services. It reads
+per-day rates from `config.yaml::artifact_scale` and materialises artifact descriptors:
 
 ```
-config.yaml + profile YAML
-        │
-        ▼
-ProfileEngine  ──▶  ProfileContext (frozen Pydantic model)
-        │
-        ▼
-IdentityGenerator  ──▶  IdentityBundle
-        │                  (computer_name, username, hardware, timestamps …)
-        ▼
-Per-service apply(context)
-        │
-        ├──▶  [HiveOperation, …]  ──▶  HiveWriter.execute_operations()
-        │                                  └──▶  hive file on mounted image
-        │
-        └──▶  [EvtxRecord, …]    ──▶  EvtxWriter.write_records()
-                                         └──▶  .evtx file on mounted image
-
-All service calls emit entries to AuditLogger
-        │
-        ▼
-audit_logger.entries  →  JSON-serialisable list (see change_log_format.md)
+per_day × persona.timeline_days × (1 ± jitter) = target count
 ```
+
+The resulting `ExpansionBundle` holds lists of `DocumentDescriptor`, `DownloadDescriptor`,
+`MediaDescriptor`, and `BrowsingDescriptor`. Downstream services read from `ctx.expansion`
+instead of their own `Random(42)` pools. Seed generators (`RegistrySeedGenerator`,
+`EvtxSeedGenerator`, `PrefetchSeedGenerator`) populate the registry, EVTX, and Prefetch
+seeds from the same expansion phase.
+
+---
+
+## Cross-Domain Forensic Coherence
+
+A single scheduler event fans out to multiple domains. A missed fan-out is detectable by
+cross-domain forensics tools (NTFS Triforce, Eric Zimmerman's suite).
+
+- `APP_LAUNCH(app, t)` → Prefetch `last_run_times[0]=t`; EVTX 4688; UserAssist ROT13 counter bump; RecentApps MRU
+- `FILE_CREATE(path, t)` → $MFT SI ctime=t; $UsnJrnl FILE_CREATE; EVTX 4663 (SACL); RecentDocs MRU; shell .lnk; Office MRU
+- `FILE_MODIFY(path, t)` → $MFT SI mtime=t; $UsnJrnl DATA_OVERWRITE; parent dir ctime bumped
+- `URL_VISIT(url, t)` → Chrome History urls + visits rows; Cookies last_accessed
+- `URL_DOWNLOAD(url, t)` → FILE_CREATE fan-out + Chrome downloads row + Zone.Identifier ADS
+- `LOGIN(t)` / `LOGOFF(t)` → EVTX 4624/4634; System 6005/6006/6013; NTUSER.DAT LastWriteTime
+
+`evaluation/consistency_checker.py::TemporalCoherenceCheck` validates after each run:
+`APP_LAUNCH(app, t)` must have a matching EVTX 4688 within ±2 s and a `.pf`
+`last_run_times[0]` within ±5 s (acceptance gate A9).
+
+---
+
+## VM-Detection Evasion
+
+ARC covers the guest-side (registry) surface. The hypervisor-side (SMBIOS, CPUID, MAC OUI,
+disk serial) is the operator's responsibility via `examples/libvirt-profile-template.xml`
+(ADR-011).
+
+| Service | Mechanism |
+|---|---|
+| `VmScrubber` | Deletes service keys: VBoxService, VBoxSF, VBoxGuest, VBoxVideo, VBoxMouse, vmtools, vmmouse, vmci, vmhgfs, vmxnet, vioscsi, viostor, qemu-ga, kvm*; deletes VBox/VMware Uninstall entries |
+| `HardwareNormalizer` | Writes Dell/HP/Lenovo vendor strings to `HKLM\HARDWARE\Description\System` (SystemBiosVersion, VideoBiosVersion); patches `HKLM\HARDWARE\DEVICEMAP\Scsi\...\Identifier` (QEMU HARDDISK → Samsung SSD 970 EVO Plus) |
+| `MacHygiene` | Walks `HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-*}\000X`; sets `NetworkAddress` to Intel OUI `00:1b:21:xx:xx:xx` or Realtek `00:e0:4c:xx:xx:xx` |
+| `ProcessFaker` | Populates 37 real Windows service keys from `templates/registry/common_services.json`; sets profile-specific `Run` keys |
+
+`identity_generator.py::_VM_STRINGS` is the single canonical list of VM indicator strings;
+`VmScrubber` imports and extends it (includes `qemu-ga`, `kvm`, `KVMKVMKVM\0\0\0`).

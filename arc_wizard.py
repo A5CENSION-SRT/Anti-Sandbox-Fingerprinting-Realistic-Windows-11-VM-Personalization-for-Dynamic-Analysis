@@ -132,54 +132,64 @@ def run_ai_generation(
     age_range: Optional[str] = None,
     output_dir: Optional[Path] = None,
 ) -> Optional[Path]:
-    """Call AIOrchestrator to generate and save a persona. Returns YAML path or None."""
+    """Generate a PersonaContext via Gemini and save it. Returns YAML path or None."""
+    import os
+    import time as _time
+    import yaml as _yaml
+
     try:
-        from services.ai import AIOrchestrator
+        from services.ai.gemini_client import GeminiClient
+        from services.ai.persona_generator import PersonaGenerator
+
+        api_key = os.environ.get("GEMINI_API_KEY") or config.get("ai", {}).get("gemini", {}).get("api_key")
+        if not api_key:
+            print("\nConfiguration error: GEMINI_API_KEY not set.")
+            return None
 
         print_section("AI Persona Generation")
-
-        orchestrator = AIOrchestrator.from_config(
-            config=config,
-            output_dir=output_dir or Path("profiles/generated"),
-        )
-
         print(f"  Occupation : {occupation}")
         if location:
             print(f"  Location   : {location}")
         if interests:
             print(f"  Interests  : {', '.join(interests)}")
-        if age_range:
-            print(f"  Age range  : {age_range}")
+
+        gemini_cfg = config.get("ai", {}).get("gemini", {})
+        client = GeminiClient(
+            api_key=api_key,
+            model=gemini_cfg.get("model", "gemini-2.0-flash"),
+            temperature=gemini_cfg.get("temperature", 0.7),
+        )
+        generator = PersonaGenerator(client)
+        hints_parts = []
+        if location:
+            hints_parts.append(f"location: {location}")
+        if interests:
+            hints_parts.append(f"interests: {', '.join(interests)}")
 
         print("\nGenerating persona via Gemini...")
-
-        result = orchestrator.generate_profile(
+        t0 = _time.perf_counter()
+        persona = generator.generate(
             occupation=occupation,
-            location=location,
-            interests=interests,
-            age_range=age_range,
+            location=location or "United States",
+            hints="; ".join(hints_parts) if hints_parts else occupation,
         )
+        elapsed_ms = (_time.perf_counter() - t0) * 1000
 
-        if result.success and result.persona:
-            p = result.persona
-            print(f"\n  Generated  : {p.full_name}")
-            print(f"  Username   : {p.username}")
-            print(f"  Org        : {p.organization}")
-            print(f"  Email      : {p.email}")
-            print(f"  Archetype  : {p.profile_archetype}")
-            if result.profile_path:
-                print(f"  Saved to   : {result.profile_path}")
-            print(f"  Time       : {result.generation_time_ms:.1f}ms")
-            return result.profile_path
+        print(f"\n  Generated  : {persona.full_name}")
+        print(f"  Username   : {persona.username}")
+        print(f"  Org        : {persona.organization}")
+        print(f"  Email      : {persona.email}")
+        print(f"  Archetype  : {persona.profile_archetype}")
+        print(f"  Time       : {elapsed_ms:.1f}ms")
 
-        print("\nAI generation failed:")
-        for err in result.errors:
-            print(f"  - {err}")
-        return None
+        out_dir = output_dir or Path("profiles/generated")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{persona.username}.yaml"
+        with out_path.open("w", encoding="utf-8") as fh:
+            _yaml.safe_dump(persona.model_dump(), fh, allow_unicode=True, sort_keys=False)
+        print(f"  Saved to   : {out_path}")
+        return out_path
 
-    except RuntimeError as exc:
-        print(f"\nConfiguration error: {exc}")
-        return None
     except Exception as exc:
         print(f"\nAI generation error: {exc}")
         return None

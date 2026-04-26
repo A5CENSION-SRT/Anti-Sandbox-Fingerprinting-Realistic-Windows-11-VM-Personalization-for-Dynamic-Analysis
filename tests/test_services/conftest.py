@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for browser download tests.
+"""Shared pytest fixtures for service tests.
 
 Auto-discovered by pytest for all test files in this directory.
 """
@@ -12,7 +12,6 @@ import pytest
 
 from core.audit_logger import AuditLogger
 from core.mount_manager import MountManager
-from services.browser.history import BrowserHistoryService
 
 
 @pytest.fixture
@@ -92,19 +91,6 @@ def data_dir(tmp_path):
         "test search term\nanother query\n", encoding="utf-8"
     )
     return d
-
-
-@pytest.fixture
-def history_db(mount_manager, timestamp_service, audit_logger, data_dir):
-    """Pre-build the History SQLite DB so BrowserDownloadService can open it."""
-    hist = BrowserHistoryService(
-        mount_manager, timestamp_service, audit_logger,
-        profile_config={"browsing": {"categories": ["general"],
-                                     "daily_avg_sites": 3}},
-        username="TestUser",
-        data_dir=str(data_dir),
-    )
-    hist.apply({"username": "TestUser", "timeline_days": 5})
 
 
 def chrome_history_db(mount_manager) -> Path:
