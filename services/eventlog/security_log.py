@@ -51,6 +51,8 @@ _EID_LOGON: int = 4624
 _EID_LOGOFF: int = 4634
 _EID_EXPLICIT_CREDS: int = 4648
 _EID_SPECIAL_PRIVS: int = 4672
+_EID_PROCESS_CREATE: int = 4688   # §7.3 fan-out: APP_LAUNCH → Security 4688
+_EID_PROCESS_EXIT: int = 4689
 _EID_KERBEROS_SVC: int = 4769
 _EID_AUDIT_POLICY: int = 4907
 
@@ -148,6 +150,24 @@ class SecurityLog(BaseService):
                         profile_type, username, computer_name, domain,
                         boot_ts, logoff_ts, rng=base_rng,
                     )
+                )
+
+            # §7.3 APP_LAUNCH fan-out: every APP_LAUNCH → 4688 + 4689 pair (A12)
+            app_launch_events = ctx.scheduler.events_of("APP_LAUNCH")
+            for ev in app_launch_events:
+                app_name = ev.payload.get("app", "unknown.exe")
+                pid = ev.payload.get("pid", 4096)
+                all_records.append(
+                    self._make_process_create(computer_name, username, app_name, pid, ev.timestamp)
+                )
+                # Process exit ~5-300 seconds after launch
+                if base_rng:
+                    dur = base_rng.randint(5, 300)
+                else:
+                    dur = 30
+                exit_ts = ev.timestamp + timedelta(seconds=dur)
+                all_records.append(
+                    self._make_process_exit(computer_name, username, app_name, pid, exit_ts)
                 )
         else:
             all_records = self.build_records(
@@ -463,5 +483,77 @@ class SecurityLog(BaseService):
             },
             keywords=_KW_AUDIT_SUCCESS,
             task=14337,
+            opcode=0,
+        )
+
+    def _make_process_create(
+        self,
+        computer: str,
+        username: str,
+        app: str,
+        pid: int,
+        ts: datetime,
+    ) -> EvtxRecord:
+        """EID 4688 — A new process has been created (§7.3 APP_LAUNCH fan-out)."""
+        exe = app if app.lower().endswith(".exe") else f"{app}.exe"
+        exe_path = rf"C:\Windows\System32\{exe}" if "\\" not in exe else exe
+        return EvtxRecord(
+            channel=_CHANNEL,
+            event_id=_EID_PROCESS_CREATE,
+            level=4,
+            provider=_PROVIDER,
+            computer=computer,
+            timestamp=ts,
+            event_data={
+                "SubjectUserSid": f"S-1-5-21-{pid}-500",
+                "SubjectUserName": username,
+                "SubjectDomainName": computer,
+                "SubjectLogonId": f"0x{pid:x}",
+                "NewProcessId": f"0x{pid:x}",
+                "NewProcessName": exe_path,
+                "TokenElevationType": "%%1938",
+                "ProcessId": f"0x{(pid // 2):x}",
+                "CommandLine": f'"{exe_path}" ',
+                "TargetUserSid": "S-1-0-0",
+                "TargetUserName": "-",
+                "TargetDomainName": "-",
+                "TargetLogonId": "0x0",
+                "ParentProcessName": r"C:\Windows\System32\svchost.exe",
+                "MandatoryLabel": "S-1-16-8192",
+            },
+            keywords=_KW_AUDIT_SUCCESS,
+            task=13312,
+            opcode=0,
+        )
+
+    def _make_process_exit(
+        self,
+        computer: str,
+        username: str,
+        app: str,
+        pid: int,
+        ts: datetime,
+    ) -> EvtxRecord:
+        """EID 4689 — A process has exited."""
+        exe = app if app.lower().endswith(".exe") else f"{app}.exe"
+        exe_path = rf"C:\Windows\System32\{exe}" if "\\" not in exe else exe
+        return EvtxRecord(
+            channel=_CHANNEL,
+            event_id=_EID_PROCESS_EXIT,
+            level=4,
+            provider=_PROVIDER,
+            computer=computer,
+            timestamp=ts,
+            event_data={
+                "SubjectUserSid": f"S-1-5-21-{pid}-500",
+                "SubjectUserName": username,
+                "SubjectDomainName": computer,
+                "SubjectLogonId": f"0x{pid:x}",
+                "Status": "0x0",
+                "ProcessId": f"0x{pid:x}",
+                "ProcessName": exe_path,
+            },
+            keywords=_KW_AUDIT_SUCCESS,
+            task=13313,
             opcode=0,
         )

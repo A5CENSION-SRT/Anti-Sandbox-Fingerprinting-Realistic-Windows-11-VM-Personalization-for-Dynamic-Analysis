@@ -80,6 +80,7 @@ _SERVICE_MODULES = {
         ("services.registry.network_profiles", "NetworkProfiles"),
         ("services.registry.system_identity", "SystemIdentity"),
         ("services.registry.userassist", "UserAssist"),
+        ("services.registry.typing_history", "TypingHistory"),
     ],
     "browser": [
         ("services.browser.browser_profile", "BrowserProfileService"),

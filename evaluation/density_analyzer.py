@@ -61,6 +61,7 @@ _SERVICE_CATEGORY: Dict[str, str] = {
     "NetworkProfiles": "registry",
     "MruRecentDocs": "registry",
     "UserAssist": "registry",
+    "TypingHistory": "registry",
     "VmScrubber": "registry",
     "HardwareNormalizer": "registry",
     "ProcessFaker": "registry",

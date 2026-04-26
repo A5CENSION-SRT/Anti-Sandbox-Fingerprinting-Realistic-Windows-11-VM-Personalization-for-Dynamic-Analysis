@@ -335,8 +335,12 @@ class DocumentGenerator(BaseService):
                     ctx.expansion.documents, username, rng, sched_now, install_time
                 )
             else:
-                created_files = self._write_hardcoded_documents(
-                    profile_type, username, rng, sched_now
+                # Scaled standalone path: generate documents at timeline density.
+                # Target ≥500 openable files (A14) without the expansion bundle.
+                target = max(500, int(ctx.persona.timeline_days * 1.5))
+                created_files = self._write_scaled_documents(
+                    profile_type, username, rng, sched_now, install_time,
+                    ctx.persona.timeline_days, target
                 )
 
             self._audit.log({
@@ -457,6 +461,110 @@ class DocumentGenerator(BaseService):
                 )
                 created += 1
                 break
+
+        return created
+
+    def _write_scaled_documents(
+        self,
+        profile_type: str,
+        username: str,
+        rng: Random,
+        now: datetime | None,
+        install_time: datetime | None,
+        timeline_days: int,
+        target: int,
+    ) -> int:
+        """Write *target* documents spread across standard Windows user folders.
+
+        Uses the existing stub generators so every file has correct magic bytes
+        and can be opened by real applications (A14).  Documents are distributed
+        across Documents/, Downloads/, Desktop/, and Pictures/ to mimic natural
+        folder usage patterns.
+        """
+        from datetime import timedelta
+
+        base_dirs = [
+            Path("Users") / username / "Documents",
+            Path("Users") / username / "Downloads",
+            Path("Users") / username / "Desktop",
+            Path("Users") / username / "Documents" / "Projects",
+            Path("Users") / username / "Documents" / "Reports",
+            Path("Users") / username / "Documents" / "Archive",
+        ]
+
+        # File type mix per profile
+        type_weights: list[tuple[str, int]] = {
+            "office_user": [("docx", 40), ("xlsx", 30), ("pdf", 20), ("txt", 10)],
+            "developer":   [("txt", 35), ("pdf", 25), ("docx", 20), ("xlsx", 20)],
+            "home_user":   [("pdf", 35), ("docx", 30), ("xlsx", 20), ("txt", 15)],
+        }.get(profile_type, [("docx", 30), ("xlsx", 25), ("pdf", 25), ("txt", 20)])
+
+        # Name stems for realistic filenames
+        stems: list[str] = {
+            "office_user": [
+                "Meeting_Notes", "Report", "Invoice", "Proposal", "Budget",
+                "Presentation", "Contract", "Memo", "Summary", "Plan",
+                "Analysis", "Review", "Update", "Draft", "Final",
+                "Q1_Report", "Q2_Report", "Q3_Report", "Q4_Report",
+            ],
+            "developer": [
+                "README", "CHANGELOG", "Design_Doc", "API_Spec", "Test_Plan",
+                "Architecture", "Requirements", "Sprint_Notes", "Bug_Report",
+                "Release_Notes", "Config", "Setup_Guide", "Migration",
+            ],
+            "home_user": [
+                "Shopping_List", "Recipe", "Budget", "Photo_Log", "Travel",
+                "Notes", "Journal", "Plan", "Wishlist", "Contacts",
+                "Warranty", "Manual", "Receipt", "Certificate",
+            ],
+        }.get(profile_type, ["Document", "File", "Notes", "Report", "Data"])
+
+        # Build weighted file type population
+        file_types: list[str] = []
+        for ft, w in type_weights:
+            file_types.extend([ft] * w)
+
+        created = 0
+        if install_time and now:
+            span_seconds = max(1, int((now - install_time).total_seconds()))
+        else:
+            span_seconds = timeline_days * 86400
+
+        # Write the hardcoded profile docs first (always)
+        created += self._write_hardcoded_documents(profile_type, username, rng, now)
+
+        # Generate scaled documents until target is met
+        used_names: set = set()
+        while created < target:
+            stem = rng.choice(stems)
+            n = created + 1
+            dir_path = rng.choice(base_dirs)
+            ft = rng.choice(file_types)
+
+            # Build a unique filename
+            candidate = f"{stem}_{n}.{ft}"
+            while candidate in used_names:
+                candidate = f"{stem}_{n}_{rng.randint(1000, 9999)}.{ft}"
+            used_names.add(candidate)
+            file_path = dir_path / candidate
+
+            # Generate the file body with realistic size ranges
+            if ft == "docx":
+                body = self._generate_docx_stub(rng, (8_192, 65_536))
+            elif ft == "xlsx":
+                body = self._generate_xlsx_stub(rng, (4_096, 32_768))
+            elif ft == "pdf":
+                body = self._generate_pdf_stub(rng, (16_384, 131_072))
+            else:  # txt
+                body = self._generate_text_content("notes", rng, now).encode("utf-8")
+
+            # Spread timestamps across the full timeline
+            offset_s = rng.randint(0, span_seconds)
+            ts = (install_time or (now or datetime.now())) + timedelta(seconds=offset_s) \
+                 if (install_time or now) else None
+
+            self._write_file(file_path, body, override_ts=ts)
+            created += 1
 
         return created
 
