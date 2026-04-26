@@ -316,8 +316,8 @@ class HardwareNormalizer(BaseService):
     ) -> List[HiveOperation]:
         """Build HARDWARE hive operations (Phase 7).
 
-        Patches DESCRIPTION\System SystemBiosVersion / VideoBiosVersion and
-        DEVICEMAP\Scsi Identifier so these no longer reveal QEMU.
+        Patches DESCRIPTION\\System SystemBiosVersion / VideoBiosVersion and
+        DEVICEMAP\\Scsi Identifier so these no longer reveal QEMU.
 
         These are skipped gracefully if the HARDWARE hive is absent in the
         offline image (it is normally volatile — rebuilt at boot time).

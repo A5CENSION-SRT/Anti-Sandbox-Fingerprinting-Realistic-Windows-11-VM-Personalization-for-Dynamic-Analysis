@@ -278,3 +278,53 @@ class TestEvtxWriterMissingPath:
         evtx_writer.apply(self.service_ctx)
         # No audit entries should be created for no-op
         assert len(audit_logger.entries) == 0
+
+
+# ---------------------------------------------------------------------------
+# A12 density gate — >=10 MB per log, >=5000 records
+# ---------------------------------------------------------------------------
+
+class TestA12Density:
+    """Gate A12: EVTX per log >=10 MB and >=5000 records."""
+
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
+    def _make_records(self, count: int, ts: datetime) -> list:
+        return [
+            EvtxRecord(
+                channel="Security",
+                event_id=4688,
+                provider="Microsoft-Windows-Security-Auditing",
+                computer="CORP-WS01",
+                timestamp=ts,
+                event_data={
+                    "SubjectUserName": f"user{i % 50}",
+                    "NewProcessName": rf"C:\Windows\System32\cmd{i}.exe",
+                    "CommandLine": f"cmd /c echo {i}",
+                },
+            )
+            for i in range(count)
+        ]
+
+    def test_file_size_exceeds_10mb(self, evtx_writer, mount_dir):
+        # 10 MB requires ~14 000 records at ~770 bytes/record
+        ts = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        records = self._make_records(14_000, ts)
+        evtx_path = "Windows/System32/winevt/Logs/Security.evtx"
+        evtx_writer.write_records(records, evtx_path)
+        dest = mount_dir / "Windows" / "System32" / "winevt" / "Logs" / "Security.evtx"
+        size_mb = dest.stat().st_size / (1024 * 1024)
+        assert size_mb >= 10.0, f"A12 fail: Security.evtx is {size_mb:.1f} MB (need >=10)"
+
+    def test_record_count_exceeds_5000(self, evtx_writer, mount_dir):
+        ts = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        records = self._make_records(5_500, ts)
+        evtx_path = "Windows/System32/winevt/Logs/Security.evtx"
+        evtx_writer.write_records(records, evtx_path)
+        dest = mount_dir / "Windows" / "System32" / "winevt" / "Logs" / "Security.evtx"
+        data = dest.read_bytes()
+        # File header has last_record_num at offset 24 (little-endian uint64)
+        last_record = struct.unpack_from("<Q", data, 24)[0]
+        assert last_record >= 5_000, f"A12 fail: only {last_record} records"

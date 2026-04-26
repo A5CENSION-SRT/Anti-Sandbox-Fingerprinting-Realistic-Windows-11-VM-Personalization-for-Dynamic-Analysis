@@ -553,3 +553,55 @@ class TestAuditLogging:
         ]
         assert len(entries) > 0
         assert any(e.get("file_type") == "sqlite_history" for e in entries)
+
+
+# ---------------------------------------------------------------
+# A13 density gate — >=5000 URLs, >=10000 visits
+# ---------------------------------------------------------------
+
+class TestA13Density:
+    """Verify Chrome History meets A13 thresholds."""
+
+    @pytest.fixture
+    def dense_service(self, mount_manager, timestamp_service, audit_logger, data_dir):
+        return BrowserHistoryService(
+            mount_manager, timestamp_service, audit_logger,
+            profile_config={
+                "browsing": {
+                    "categories": ["general", "news", "social_media", "tech"],
+                    "daily_avg_sites": 50,
+                },
+                "work_hours": {"start": 9, "end": 17, "active_days": [1, 2, 3, 4, 5]},
+            },
+            username="TestUser",
+            data_dir=str(data_dir),
+        )
+
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
+    def _history_db(self, mount_manager):
+        return (
+            mount_manager.root / "Users" / "TestUser"
+            / "AppData" / "Local" / "Google" / "Chrome"
+            / "User Data" / "Default" / "History"
+        )
+
+    def test_url_count_meets_a13(self, dense_service, mount_manager):
+        dense_service.apply(self.service_ctx)
+        conn = sqlite3.connect(str(self._history_db(mount_manager)))
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM urls").fetchone()[0]
+        finally:
+            conn.close()
+        assert count >= 5_000, f"A13 fail: only {count} URLs (need >=5000)"
+
+    def test_visit_count_meets_a13(self, dense_service, mount_manager):
+        dense_service.apply(self.service_ctx)
+        conn = sqlite3.connect(str(self._history_db(mount_manager)))
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM visits").fetchone()[0]
+        finally:
+            conn.close()
+        assert count >= 10_000, f"A13 fail: only {count} visits (need >=10000)"

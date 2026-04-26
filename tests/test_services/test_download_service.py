@@ -45,7 +45,8 @@ class TestFilesystemStubs:
                         count=2)
         svc.apply(self.service_ctx)
         dl = mount_manager.root / "Users" / "TestUser" / "Downloads"
-        assert len(list(dl.iterdir())) == 2
+        actual = [f for f in dl.iterdir() if "Zone.Identifier" not in f.name]
+        assert len(actual) == 2
 
     def test_stub_filenames_realistic(self, mount_manager, timestamp_service,
                                       audit_logger, data_dir):

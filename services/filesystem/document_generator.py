@@ -560,7 +560,7 @@ class DocumentGenerator(BaseService):
 
             # Spread timestamps across the full timeline
             offset_s = rng.randint(0, span_seconds)
-            ts = (install_time or (now or datetime.now())) + timedelta(seconds=offset_s) \
+            ts = (install_time or now) + timedelta(seconds=offset_s) \
                  if (install_time or now) else None
 
             self._write_file(file_path, body, override_ts=ts)
