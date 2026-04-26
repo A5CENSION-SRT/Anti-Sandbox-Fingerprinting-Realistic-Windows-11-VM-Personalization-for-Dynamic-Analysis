@@ -74,5 +74,5 @@ class PersonaContext(BaseModel):
     browsing_categories: List[str] = Field(default_factory=lambda: ["general"])
     daily_avg_sites: int = Field(default=50, ge=1, le=500)
     timeline_days: int = Field(default=360, ge=1, le=3650)
-    windows_build_hint: Literal["22H2", "23H2", "24H2"] = "23H2"
+    windows_build_hint: Literal["22H2", "23H2", "24H2", "25H2"] = "23H2"
     hostname_hints: List[str] = Field(default_factory=list)

@@ -93,11 +93,12 @@ def _create_minimal_hive(path: Path) -> None:
     struct.pack_into("<I", hive_data, hbin_off + 28, 0)     # spare
 
     # ── Root NK Cell ── offset 4096 + 32 ───────────────────────────
+    # NK fixed header is 80 bytes (4 size field + 76 nk fields including work_var).
+    # Offsets below are from cell_off (start of size field).
     cell_off = hbin_off + _HIVE_BIN_HEADER_SIZE
     root_name = b"CMI-CreateHive{2A7FB991-7BBE-4F9D-B91E-7CB328BEC3A6}"
-    cell_size = 76 + len(root_name)  # NK header + name
-    # Negative size = allocated cell
-    struct.pack_into("<i", hive_data, cell_off, -cell_size)
+    cell_size = _NK_ROOT_SIZE + len(root_name)  # 80 + name bytes
+    struct.pack_into("<i", hive_data, cell_off, -cell_size)   # negative = allocated
     struct.pack_into("<2s", hive_data, cell_off + 4, b"nk")  # signature
     struct.pack_into("<H", hive_data, cell_off + 6, 0x0020)  # flags = KEY_HIVE_ENTRY
     struct.pack_into("<Q", hive_data, cell_off + 8, 0)       # timestamp
@@ -115,16 +116,41 @@ def _create_minimal_hive(path: Path) -> None:
     struct.pack_into("<I", hive_data, cell_off + 60, 0)      # max class name len
     struct.pack_into("<I", hive_data, cell_off + 64, 0)      # max value name len
     struct.pack_into("<I", hive_data, cell_off + 68, 0)      # max value data size
-    struct.pack_into("<H", hive_data, cell_off + 72, len(root_name))  # name length
-    struct.pack_into("<H", hive_data, cell_off + 74, 0)      # class name length
-    hive_data[cell_off + 76:cell_off + 76 + len(root_name)] = root_name
+    struct.pack_into("<I", hive_data, cell_off + 72, 0)      # work_var (spare)
+    struct.pack_into("<H", hive_data, cell_off + 76, len(root_name))  # name length
+    struct.pack_into("<H", hive_data, cell_off + 78, 0)      # class name length
+    hive_data[cell_off + 80:cell_off + 80 + len(root_name)] = root_name
 
-    # ── Free cell for remaining space
-    # cell_size already includes the 4-byte size field, so no extra +4 here
-    used = _HIVE_BIN_HEADER_SIZE + cell_size
+    # ── SK (Security Key) Cell ── required by hivex_node_add_child ──────
+    # hivex reads parent_nk->sk, adds 0x1000, and validates the block.
+    # Without a valid SK cell, node_add_child returns EFAULT.
+    sk_cell_off = cell_off + cell_size          # absolute file offset of SK cell
+    sk_rel = sk_cell_off - _HIVE_HEADER_SIZE    # offset relative to hive bins start
+    # Minimal security descriptor: 20 bytes (self-relative, null DACL)
+    sec_desc = bytearray(20)
+    sec_desc[0] = 1         # Revision
+    sec_desc[1] = 0         # Sbz1
+    struct.pack_into("<H", sec_desc, 2, 0x8004)  # SE_SELF_RELATIVE | SE_DACL_PRESENT
+    # owner/group/sacl/dacl offsets = 0 (absent)
+    sk_size = 24 + len(sec_desc)                # 4 seg_len + 2+2+4+4+4+4 header + sec_desc
+    # Round to 8-byte boundary (hivex requires alignment)
+    sk_size = ((sk_size + 7) // 8) * 8
+    struct.pack_into("<i", hive_data, sk_cell_off, -sk_size)      # allocated
+    struct.pack_into("<2s", hive_data, sk_cell_off + 4, b"sk")    # signature
+    struct.pack_into("<H", hive_data, sk_cell_off + 6, 0)         # unknown
+    struct.pack_into("<I", hive_data, sk_cell_off + 8, sk_rel)    # sk_prev → self
+    struct.pack_into("<I", hive_data, sk_cell_off + 12, sk_rel)   # sk_next → self
+    struct.pack_into("<I", hive_data, sk_cell_off + 16, 0)        # refcount (hivex bumps)
+    struct.pack_into("<I", hive_data, sk_cell_off + 20, len(sec_desc))  # sec_desc_len
+    hive_data[sk_cell_off + 24:sk_cell_off + 24 + len(sec_desc)] = sec_desc
+    # Point root NK's sk field at this SK cell (relative offset)
+    struct.pack_into("<I", hive_data, cell_off + 48, sk_rel)
+
+    # ── Free cell for remaining space ────────────────────────────────
+    used = _HIVE_BIN_HEADER_SIZE + cell_size + sk_size
     remaining = bin_data_size - used
     if remaining > 4:
-        free_off = cell_off + cell_size
+        free_off = sk_cell_off + sk_size
         struct.pack_into("<i", hive_data, free_off, remaining)
 
     path.write_bytes(bytes(hive_data))
