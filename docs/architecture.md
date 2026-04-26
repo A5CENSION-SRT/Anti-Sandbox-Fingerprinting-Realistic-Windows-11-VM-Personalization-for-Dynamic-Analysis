@@ -16,7 +16,7 @@ core/linux_mount.py        — LinuxMountBackend: libguestfs + hivex + guestmoun
 core/orchestrator.py       — phase runner; owns execution order
 
 services/expansion/        — ExpansionOrchestrator → ExpansionBundle
-services/registry/         — 5 domain services; hivex-backed HiveWriter
+services/registry/         — 6 domain services (+ TypingHistory); hivex-backed HiveWriter
 services/browser/          — history, downloads, bookmarks, cookies, CDP logs
 services/filesystem/       — Prefetch, cross_writer, documents, office_mru, ps_history
 services/eventlog/         — evtx_writer + 4 channel services

@@ -1,133 +1,135 @@
-# Anti-Sandbox VM Personalization — Project Structure & Team Split
+# ARC — Project Structure
 
----
-
-## Folder Structure
+Current layout after the rescue refactor.  See `docs/MASTER_PLAN.md` for the full
+architectural rationale.
 
 ```
-anti-sandbox-personalizer/
-│
-├── main.py                          # Entry point — CLI interface
-├── config.yaml                      # Global config (mount path, log level, etc.)
+.
+├── main.py                          CLI entry point (--preset / --ai-generate / --vhdx)
+├── arc_wizard.py                    Interactive menu wizard
+├── verify_realism.py                Post-injection realism checker
+├── config.yaml                      Runtime configuration (timeline_days, mount_path, …)
 ├── requirements.txt
-├── README.md
-│
-├── profiles/
-│   ├── base.yaml                    # Shared defaults all profiles inherit
-│   ├── office_user.yaml
-│   ├── developer.yaml
-│   └── home_user.yaml
+├── GETTING_STARTED.md               Operator setup guide (replaces SETUP/START_HERE)
 │
 ├── core/
-│   ├── __init__.py
-│   ├── orchestrator.py              # Wires all services, runs in dependency order
-│   ├── profile_engine.py            # Loads & resolves profile YAML into ProfileContext
-│   ├── identity_generator.py        # Fake name, email, org, machine name, HW strings
-│   ├── timestamp_service.py         # Master timeline, realistic time distribution
-│   ├── mount_manager.py             # Mount point validation, path helpers, permissions
-│   └── audit_logger.py              # Logs every write/modify across all services
+│   ├── persona_context.py           Canonical 25+ field PersonaContext (ADR-001)
+│   ├── persona_loader.py            YAML → PersonaContext; preset or AI path
+│   ├── service_context.py           Typed ServiceContext threaded through all services
+│   ├── event_scheduler.py           Deterministic cross-domain event stream (ADR-005)
+│   ├── linux_mount.py               LinuxMountBackend: libguestfs + hivex + ntfs-3g (ADR-002)
+│   ├── mount_manager.py             Path resolution; delegates to LinuxMountBackend
+│   ├── orchestrator.py              Phase runner and service registry
+│   ├── identity_generator.py        IdentityBundle: user + hardware identity
+│   ├── timestamp_service.py         Timeline-aware timestamps
+│   ├── audit_logger.py              Structured audit trail for every write
+│   ├── llm_client.py                Local LLM client for artifact body generation
+│   └── time_utils.py                Scheduler-aware datetime helpers
 │
 ├── services/
-│   ├── __init__.py
-│   ├── base_service.py              # Abstract base class all services inherit
+│   ├── base_service.py              BaseService ABC: apply(ctx: ServiceContext) → None
 │   │
-│   ├── filesystem/
-│   │   ├── __init__.py
-│   │   ├── cross_writer.py          # Recursive dir/file writing to mounted drive
-│   │   ├── user_directory.py        # C:\Users\<name> scaffold
-│   │   ├── document_generator.py    # .docx, .xlsx, .pdf, .txt with metadata
-│   │   ├── media_stub.py            # JPEG/PNG with EXIF, small media stubs
-│   │   ├── prefetch.py              # Synthetic .pf files in C:\Windows\Prefetch
-│   │   ├── thumbnail_cache.py       # thumbcache_*.db, IconCache.db
-│   │   ├── recent_items.py          # .lnk files, Jump Lists
-│   │   └── recycle_bin.py           # $Recycle.Bin artifacts ($I / $R pairs)
+│   ├── expansion/                   ExpansionOrchestrator → ExpansionBundle
+│   │   ├── orchestrator.py
+│   │   └── bundle.py
 │   │
 │   ├── registry/
-│   │   ├── __init__.py
-│   │   ├── hive_writer.py           # Core offline registry hive read/write
-│   │   ├── mru_recentdocs.py        # RecentDocs, OpenSaveMRU, LastVisitedMRU
-│   │   ├── userassist.py            # ROT13-encoded execution traces
-│   │   ├── installed_programs.py    # Uninstall registry entries
-│   │   ├── system_identity.py       # BIOS, disk, ProductId, machine GUID
-│   │   └── network_profiles.py      # Saved Wi-Fi / network connection profiles
+│   │   ├── hive_writer.py           hivex-backed HiveWriter + HiveOperation (ADR-002)
+│   │   ├── installed_programs.py    Uninstall registry keys
+│   │   ├── mru_recentdocs.py        RecentDocs MRU per extension
+│   │   ├── network_profiles.py      Network interface history
+│   │   ├── system_identity.py       Computer name, SID, machine GUID
+│   │   ├── userassist.py            UserAssist ROT13-encoded run counts
+│   │   └── typing_history.py        TypedURLs, TypedPaths, WordWheelQuery (A10)
+│   │
+│   ├── filesystem/
+│   │   ├── cross_writer.py          Recursive directory/file writer
+│   │   ├── prefetch.py              v30 SCCA Prefetch files (A11)
+│   │   ├── document_generator.py    DOCX/XLSX/PDF documents (A14)
+│   │   ├── office_mru.py            Office Recent MRU registry + files
+│   │   ├── powershell_history.py    ConsoleHost_history.txt
+│   │   ├── cdp_logs.py              ConnectedDevicesPlatform logs
+│   │   ├── thumbnail_cache.py       thumbcache_*.db stubs
+│   │   ├── recent_items.py          Shell Recent .lnk files
+│   │   ├── recycle_bin.py           $Recycle.Bin stubs
+│   │   ├── user_directory.py        User folder skeleton
+│   │   ├── installed_apps_stub.py   Binary stubs for installed executables
+│   │   ├── media_stub.py            Media file stubs
+│   │   └── system_content_populator.py
 │   │
 │   ├── browser/
-│   │   ├── __init__.py
-│   │   ├── browser_profile.py       # Chrome/Edge profile dir + config JSONs
-│   │   ├── history.py               # SQLite History DB (URLs, visits, searches)
-│   │   ├── cookies_cache.py         # Cookie DB + cache index stubs
-│   │   ├── bookmarks.py             # Bookmarks JSON
-│   │   └── downloads.py             # Downloads table (cross-ref with filesystem)
+│   │   ├── history.py               Chrome/Edge History SQLite (A13)
+│   │   ├── downloads.py             Download records + Zone.Identifier ADS (A18/R27)
+│   │   ├── bookmarks.py             Bookmarks JSON
+│   │   ├── browser_profile.py       Profile dirs + Local State
+│   │   ├── cookies_cache.py         Cookies SQLite + cache stubs
+│   │   ├── generators/              Schema SQL, visit/download generators
+│   │   └── utils/                   Chrome epoch, URL loader, constants
 │   │
 │   ├── eventlog/
-│   │   ├── __init__.py
-│   │   ├── evtx_writer.py           # Core .evtx binary construction/injection
-│   │   ├── system_log.py            # System.evtx — boot, service, driver events
-│   │   ├── security_log.py          # Security.evtx — logon/logoff events
-│   │   ├── application_log.py       # Application.evtx — app errors, installs
-│   │   └── update_artifacts.py      # SoftwareDistribution, CBS.log, KB traces
+│   │   ├── evtx_writer.py           Multi-chunk EVTX binary writer (v3.0)
+│   │   ├── security_log.py          4624/4634/4688/4689/4648/4672/4769 (A12)
+│   │   ├── system_log.py            6005/6006/12/13/7036 + service events
+│   │   ├── application_log.py       MSI installs, app crashes, periodic stubs
+│   │   └── update_artifacts.py      Windows Update history
 │   │
 │   ├── applications/
-│   │   ├── __init__.py
-│   │   ├── office_artifacts.py      # Office MRU, temp/recovery files
-│   │   ├── dev_environment.py       # VS Code, Git, Node/Python caches
-│   │   ├── email_client.py          # Outlook .ost stub / Thunderbird prefs
-│   │   └── comms_apps.py            # Teams/Slack/Discord/Zoom traces
+│   │   ├── dev_environment.py       .gitconfig, SSH, VS Code, Docker artifacts
+│   │   ├── office_artifacts.py      Office document + LNK stubs
+│   │   ├── email_client.py          Outlook profile XML + PST stubs
+│   │   └── comms_apps.py            Teams, Slack, Discord, Zoom dirs
 │   │
-│   └── anti_fingerprint/
-│       ├── __init__.py
-│       ├── vm_scrubber.py           # Remove VBox/VMware indicators
-│       ├── hardware_normalizer.py   # Realistic SMBIOS/WMI/GPU strings
-│       └── process_faker.py         # Service entries, SRUM stubs
+│   ├── ntfs/
+│   │   ├── mft_timestamp_patcher.py $STANDARD_INFORMATION SI patching via setxattr
+│   │   ├── usn_journal_writer.py    $UsnJrnl:$J USN_RECORD_V2 appender
+│   │   └── logfile_writer.py        $LogFile stub (best-effort)
+│   │
+│   ├── anti_fingerprint/
+│   │   ├── vm_scrubber.py           Deletes VBox/VMware/QEMU/KVM service keys
+│   │   ├── hardware_normalizer.py   BIOS/SCSI/GPU string replacement
+│   │   ├── mac_hygiene.py           NIC NetworkAddress OUI override
+│   │   └── process_faker.py         Fake process list stubs
+│   │
+│   └── ai/
+│       ├── persona_generator.py     PersonaContext via Gemini
+│       ├── gemini_client.py         Google Gemini API client
+│       ├── schemas.py               AI seed schemas
+│       ├── seed_generators/         Browsing, documents, downloads, registry seeds
+│       └── prompts/                 LLM prompt templates
 │
-├── templates/
-│   ├── documents/                   # Template .docx/.xlsx/.pptx for doc generator
-│   │   ├── meeting_notes.docx
-│   │   ├── quarterly_report.xlsx
-│   │   └── readme_template.txt
-│   ├── browser/
-│   │   ├── bookmarks_office.json
-│   │   ├── bookmarks_developer.json
-│   │   └── bookmarks_home.json
-│   └── registry/
-│       └── common_services.json     # Expected Windows service entries
+├── profiles/
+│   └── presets/
+│       ├── developer.yaml
+│       ├── office_user.yaml
+│       └── home_user.yaml
 │
 ├── data/
-│   ├── wordlists/                   # For generating realistic content
-│   │   ├── filenames.txt
-│   │   ├── folder_names.txt
-│   │   ├── search_terms.txt
-│   │   └── urls_by_category.json
-│   ├── hardware_models.json         # Realistic BIOS/disk/GPU model strings
-│   └── kb_updates.json              # Real Windows KB numbers + dates
+│   └── wordlists/                   URL pool, download catalogue, search terms
+│
+├── templates/                       Browser bookmark templates, EVTX templates
 │
 ├── evaluation/
-│   ├── __init__.py
-│   ├── consistency_checker.py       # Do MRUs point to real files? Timeline sane?
-│   ├── density_analyzer.py          # File/key/event counts vs reference baseline
-│   ├── sandbox_signal_tester.py     # Checklist of common VM detection signals
-│   └── report_generator.py          # Produces the final evaluation report
+│   ├── density_analyzer.py          Artifact density thresholds (A10–A14)
+│   ├── consistency_checker.py       ConsistencyChecker + TemporalCoherenceCheck (A9)
+│   └── sandbox_signal_tester.py
+│
+├── scripts/
+│   └── build_baseline_vhdx.sh       virt-install unattended Windows 11 build
+│
+├── examples/
+│   ├── unattend.xml                 Silent-install Windows answer file
+│   └── libvirt-profile-template.xml SMBIOS/MAC/disk-serial spoofing reference
 │
 ├── tests/
-│   ├── __init__.py
-│   ├── test_core/
-│   │   ├── test_profile_engine.py
-│   │   ├── test_timestamp_service.py
-│   │   └── test_identity_generator.py
-│   ├── test_services/
-│   │   ├── test_cross_writer.py
-│   │   ├── test_document_generator.py
-│   │   ├── test_browser_history.py
-│   │   ├── test_registry_writer.py
-│   │   └── test_evtx_writer.py
-│   └── test_evaluation/
-│       └── test_consistency_checker.py
+│   ├── test_core/                   PersonaLoader, EventScheduler, LinuxMount, …
+│   ├── test_services/               Per-service unit + integration tests (829 passing)
+│   └── test_evaluation/             ConsistencyChecker, TemporalCoherenceCheck, DensityAnalyzer
 │
 └── docs/
-    ├── architecture.md              # High-level design & service dependency graph
-    ├── profile_schema.md            # How to write/extend profile YAML files
-    ├── change_log_format.md         # Audit log schema documentation
-    └── evaluation_report.md         # Final deliverable report (template)
+    ├── MASTER_PLAN.md               Authoritative architecture + phase plan
+    ├── architecture.md              System overview
+    ├── profile_schema.md            PersonaContext field reference
+    ├── research/                    NTFS journal, time integrity, VM evasion, …
+    ├── design/decisions.md          ADR log (ADR-001 … ADR-016)
+    └── archive/                     Superseded docs
 ```
-
----
