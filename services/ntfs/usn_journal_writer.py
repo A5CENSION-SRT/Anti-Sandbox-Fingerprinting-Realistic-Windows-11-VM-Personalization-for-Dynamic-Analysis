@@ -1,243 +1,362 @@
-"""USN Change Journal ($UsnJrnl:$J) writer.
+"""NTFS Update Sequence Number (USN) Journal writer.
 
-Appends synthetic USN_RECORD_V2 entries to the NTFS change journal stream so
-that forensic tools (MFTECmd, Velociraptor) see a realistic audit trail of
-file system operations.
+This service appends USN_RECORD_V3 structures to the NTFS $UsnJrnl:$J stream
+based on file operation events from the scheduler. The USN Journal provides
+a persistent log of all changes to files and directories on an NTFS volume.
 
-Background
-----------
-Windows maintains a USN (Update Sequence Number) journal at
-``\\$Extend\\$UsnJrnl:$J``.  Each record describes one file-system event
-(create, write, rename, delete, close).  On NTFS volumes with no journal
-activity the stream is conspicuously empty — a sandbox tell.
+The journal consists of two streams:
+- $UsnJrnl:$Max - Header with metadata (NextUsn, LowestValidUsn, etc.)
+- $UsnJrnl:$J - Sparse stream containing USN_RECORD_V3 structures
 
-This service appends V2 records derived from ``EventScheduler`` events.
-The ``$J`` stream is opened for append via the FUSE-mounted path; if the
-path is inaccessible the service degrades gracefully with a warning.
-
-USN_RECORD_V2 layout (60-byte fixed header + variable filename)
----------------------------------------------------------------
-::
-
-    DWORD  RecordLength          (includes filename + pad to 8-byte boundary)
-    WORD   MajorVersion = 2
-    WORD   MinorVersion = 0
-    QWORD  FileReferenceNumber
-    QWORD  ParentFileReferenceNumber
-    LONGLONG Usn
-    LARGE_INTEGER TimeStamp      (FILETIME)
-    DWORD  Reason
-    DWORD  SourceInfo = 0
-    DWORD  SecurityId = 0
-    DWORD  FileAttributes
-    WORD   FileNameLength        (bytes, not chars)
-    WORD   FileNameOffset = 60
-    WCHAR  FileName[...]
-
-Reason flags (selected)
------------------------
-- 0x00000001  USN_REASON_DATA_OVERWRITE
-- 0x00000002  USN_REASON_DATA_EXTEND
-- 0x00000100  USN_REASON_FILE_CREATE
-- 0x00000200  USN_REASON_FILE_DELETE
-- 0x00001000  USN_REASON_RENAME_NEW_NAME
-- 0x00002000  USN_REASON_RENAME_OLD_NAME
-- 0x80000000  USN_REASON_CLOSE
+This service requires a FUSE-mounted NTFS filesystem to access the alternate
+data streams via colon-path syntax ($UsnJrnl:$J).
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import struct
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+    from core.service_context import ServiceContext
 
 from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
 
-_FILETIME_EPOCH: int = 116_444_736_000_000_000
 
-# USN reason flags
-_USN_FILE_CREATE: int = 0x00000100
-_USN_FILE_DELETE: int = 0x00000200
-_USN_DATA_EXTEND: int = 0x00000002
-_USN_DATA_OVERWRITE: int = 0x00000001
-_USN_CLOSE: int = 0x80000000
-
-# Fixed header size for V2 (before filename)
-_V2_HEADER_SIZE: int = 60
-
-# Journal stream path relative to NTFS root (FUSE layout uses $-prefixed names)
-_USN_JOURNAL_REL: str = "$Extend/$UsnJrnl/$J"
-
-# Maximum records to append (keeps the stream size realistic)
-_MAX_RECORDS: int = 50_000
+# Windows FILETIME epoch
+_FILETIME_EPOCH_DELTA = 11644473600
 
 
-class UsnJournalWriterError(Exception):
-    """Raised when USN journal write fails."""
+# USN Reason Flags (from winioctl.h)
+USN_REASON_DATA_OVERWRITE = 0x00000001
+USN_REASON_DATA_EXTEND = 0x00000002
+USN_REASON_DATA_TRUNCATION = 0x00000004
+USN_REASON_NAMED_DATA_OVERWRITE = 0x00000010
+USN_REASON_NAMED_DATA_EXTEND = 0x00000020
+USN_REASON_NAMED_DATA_TRUNCATION = 0x00000040
+USN_REASON_FILE_CREATE = 0x00000100
+USN_REASON_FILE_DELETE = 0x00000200
+USN_REASON_EA_CHANGE = 0x00000400
+USN_REASON_SECURITY_CHANGE = 0x00000800
+USN_REASON_RENAME_OLD_NAME = 0x00001000
+USN_REASON_RENAME_NEW_NAME = 0x00002000
+USN_REASON_INDEXABLE_CHANGE = 0x00004000
+USN_REASON_BASIC_INFO_CHANGE = 0x00008000
+USN_REASON_HARD_LINK_CHANGE = 0x00010000
+USN_REASON_COMPRESSION_CHANGE = 0x00020000
+USN_REASON_ENCRYPTION_CHANGE = 0x00040000
+USN_REASON_OBJECT_ID_CHANGE = 0x00080000
+USN_REASON_REPARSE_POINT_CHANGE = 0x00100000
+USN_REASON_STREAM_CHANGE = 0x00200000
+USN_REASON_TRANSACTED_CHANGE = 0x00400000
+USN_REASON_CLOSE = 0x80000000
 
 
-def _to_filetime(dt: datetime) -> int:
+# File Attributes (from winnt.h)
+FILE_ATTRIBUTE_READONLY = 0x00000001
+FILE_ATTRIBUTE_HIDDEN = 0x00000002
+FILE_ATTRIBUTE_SYSTEM = 0x00000004
+FILE_ATTRIBUTE_DIRECTORY = 0x00000010
+FILE_ATTRIBUTE_ARCHIVE = 0x00000020
+FILE_ATTRIBUTE_NORMAL = 0x00000080
+FILE_ATTRIBUTE_TEMPORARY = 0x00000100
+FILE_ATTRIBUTE_SPARSE_FILE = 0x00000200
+FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+FILE_ATTRIBUTE_COMPRESSED = 0x00000800
+FILE_ATTRIBUTE_OFFLINE = 0x00001000
+FILE_ATTRIBUTE_NOT_CONTENT_INDEXED = 0x00002000
+FILE_ATTRIBUTE_ENCRYPTED = 0x00004000
+
+
+def _datetime_to_filetime(dt: datetime) -> int:
+    """Convert Python datetime to Windows FILETIME."""
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
-    ticks = int((dt - epoch).total_seconds() * 1e7)
-    return ticks + _FILETIME_EPOCH
+    unix_timestamp = dt.timestamp()
+    return int((unix_timestamp + _FILETIME_EPOCH_DELTA) * 10_000_000)
 
 
-def _build_usn_record(
-    usn: int,
-    filename: str,
-    file_ref: int,
-    parent_ref: int,
-    timestamp: datetime,
-    reason: int,
-    file_attrs: int,
-) -> bytes:
-    """Pack one USN_RECORD_V2 into bytes, padded to 8-byte boundary."""
-    fname_bytes = filename.encode("utf-16-le")
-    fname_len = len(fname_bytes)
-    record_len_raw = _V2_HEADER_SIZE + fname_len
-    # Pad to 8-byte boundary
-    record_len = (record_len_raw + 7) & ~7
-
-    buf = bytearray(record_len)
-    struct.pack_into(
-        "<IHHQQqQIIIIHH",
-        buf, 0,
-        record_len,         # RecordLength
-        2,                  # MajorVersion
-        0,                  # MinorVersion
-        file_ref,           # FileReferenceNumber
-        parent_ref,         # ParentFileReferenceNumber
-        usn,                # Usn (LONGLONG)
-        _to_filetime(timestamp),  # TimeStamp
-        reason,             # Reason
-        0,                  # SourceInfo
-        0,                  # SecurityId
-        file_attrs,         # FileAttributes
-        fname_len,          # FileNameLength
-        _V2_HEADER_SIZE,    # FileNameOffset
-    )
-    buf[_V2_HEADER_SIZE:_V2_HEADER_SIZE + fname_len] = fname_bytes
-    return bytes(buf)
+@dataclass
+class UsnRecordV3:
+    """NTFS Update Sequence Number record (version 3).
+    
+    This structure is appended to $UsnJrnl:$J for each file operation.
+    """
+    
+    record_length: int
+    major_version: int = 3
+    minor_version: int = 0
+    file_reference_number: int = 0  # MFT entry number (48-bit) + sequence (16-bit)
+    parent_file_reference_number: int = 0
+    usn: int = 0  # Update Sequence Number
+    timestamp: int = 0  # Windows FILETIME
+    reason: int = 0  # USN_REASON_* flags
+    source_info: int = 0
+    security_id: int = 0
+    file_attributes: int = FILE_ATTRIBUTE_ARCHIVE
+    file_name_length: int = 0  # Length in bytes (UTF-16LE)
+    file_name_offset: int = 60  # Offset to file name within record
+    file_name: str = ""
+    
+    def to_bytes(self) -> bytes:
+        """Pack USN_RECORD_V3 to binary format for $UsnJrnl:$J.
+        
+        Returns:
+            Binary representation of the USN record
+        """
+        # Encode filename as UTF-16LE
+        file_name_bytes = self.file_name.encode("utf-16-le")
+        file_name_length = len(file_name_bytes)
+        
+        # Calculate total record length (must be 8-byte aligned)
+        base_length = 60 + file_name_length
+        record_length = ((base_length + 7) // 8) * 8  # Round up to 8-byte boundary
+        
+        # Pack the fixed-size header (60 bytes)
+        header = struct.pack(
+            "<I"      # RecordLength (DWORD)
+            "HH"      # MajorVersion, MinorVersion (WORD, WORD)
+            "Q"       # FileReferenceNumber (DWORDLONG)
+            "Q"       # ParentFileReferenceNumber (DWORDLONG)
+            "Q"       # Usn (USN / LONGLONG)
+            "Q"       # TimeStamp (LARGE_INTEGER)
+            "I"       # Reason (DWORD)
+            "I"       # SourceInfo (DWORD)
+            "I"       # SecurityId (DWORD)
+            "I"       # FileAttributes (DWORD)
+            "H"       # FileNameLength (WORD)
+            "H",      # FileNameOffset (WORD)
+            record_length,
+            self.major_version,
+            self.minor_version,
+            self.file_reference_number,
+            self.parent_file_reference_number,
+            self.usn,
+            self.timestamp,
+            self.reason,
+            self.source_info,
+            self.security_id,
+            self.file_attributes,
+            file_name_length,
+            self.file_name_offset
+        )
+        
+        # Append filename and padding
+        padding_length = record_length - base_length
+        padding = b'\x00' * padding_length
+        
+        return header + file_name_bytes + padding
 
 
 class UsnJournalWriter(BaseService):
-    """Appends synthetic USN_RECORD_V2 entries to the NTFS change journal.
-
-    Args:
-        mount_manager: Resolves paths against the FUSE-mounted NTFS root.
-        audit_logger:  Shared audit logger.
+    """Appends USN records to NTFS $UsnJrnl:$J stream.
+    
+    This service processes file operation events from the scheduler and
+    appends corresponding USN_RECORD_V3 structures to the USN Journal.
+    
+    The USN Journal must be initialized by Windows before this service can
+    write to it (baseline VHDX must have completed OOBE).
     """
-
-    def __init__(self, mount_manager: Any, audit_logger: Any) -> None:
-        self._mount = mount_manager
-        self._audit_logger = audit_logger
-
-    @property
-    def service_name(self) -> str:
-        return "UsnJournalWriter"
-
+    
+    service_name = "UsnJournalWriter"
+    
+    def __init__(self) -> None:
+        """Initialize the USN Journal writer service."""
+        super().__init__()
+        self._next_usn = 0
+        self._next_file_ref = 0x1000  # Start at a reasonable MFT entry number
+    
     def apply(self, ctx: "ServiceContext") -> None:
-        """Write USN records for all scheduler FILE_* events.
-
-        Opens ``$Extend/$UsnJrnl/$J`` for append via the FUSE mount. If the
-        path is inaccessible (non-FUSE host filesystem, or offline vhd), the
-        service logs a warning and returns without error.
-
-        Raises:
-            UsnJournalWriterError: On fatal write error after open succeeds.
+        """Append USN records based on scheduler events.
+        
+        Args:
+            ctx: Service execution context
         """
-        if ctx.scheduler is None:
-            logger.warning("UsnJournalWriter: no scheduler; skipping")
-            return
-
-        try:
-            journal_path = self._mount.resolve(_USN_JOURNAL_REL)
-        except Exception as exc:
-            logger.warning("UsnJournalWriter: cannot resolve journal path: %s", exc)
-            return
-
-        records = self._build_records(ctx)
-        if not records:
-            return
-
-        try:
-            journal_path.parent.mkdir(parents=True, exist_ok=True)
-            with journal_path.open("ab") as fh:
-                for record in records:
-                    fh.write(record)
-        except PermissionError:
+        logger.info("Starting NTFS $UsnJrnl:$J record appending")
+        
+        # Verify FUSE mount is available
+        if ctx.mount.backend is None:
             logger.warning(
-                "UsnJournalWriter: no write access to %s; "
-                "ensure ntfs-3g FUSE mount is active",
-                journal_path,
+                "No backend available - skipping USN journal writes. "
+                "This service requires FUSE mount (Phase B)."
             )
             return
-        except OSError as exc:
-            raise UsnJournalWriterError(
-                f"Failed to write USN journal: {exc}"
-            ) from exc
-
-        self._audit_logger.log({
-            "service": self.service_name,
-            "operation": "write_usn_journal",
-            "records_written": len(records),
-        })
-        logger.info("USN journal: wrote %d records", len(records))
-
-    def _build_records(self, ctx: "ServiceContext") -> List[bytes]:
-        """Build USN_RECORD_V2 payloads from scheduler events."""
-        rng = (
-            ctx.scheduler.child_rng("UsnJournal")
-            if ctx.scheduler
-            else __import__("random").Random(0)
-        )
-        records: List[bytes] = []
-        usn: int = rng.randint(0x0001_0000_0000, 0x000F_0000_0000)
-        usn_step: int = 64  # typical journal step size
-
-        # Root directory reference
-        root_ref: int = 0x0005_0000_0000_0005
-
-        event_types = {
-            "FILE_CREATE": (_USN_FILE_CREATE | _USN_CLOSE, 0x20),     # archive
-            "FILE_MODIFY": (_USN_DATA_EXTEND | _USN_CLOSE, 0x20),
-            "FILE_DELETE": (_USN_FILE_DELETE | _USN_CLOSE, 0x20),
-        }
-
-        seen_events = 0
-        for event in ctx.scheduler.events_of("FILE_CREATE", "FILE_MODIFY", "FILE_DELETE"):
-            if seen_events >= _MAX_RECORDS:
-                break
-
-            rel_path: Optional[str] = (event.payload or {}).get("path")
-            if not rel_path:
-                continue
-
-            event_kind = event.event_type
-            reason, attrs = event_types.get(event_kind, (_USN_DATA_OVERWRITE | _USN_CLOSE, 0x20))
-
-            filename = Path(rel_path).name
-            file_ref = rng.randint(0x0002_0000_0000_0000, 0x0004_FFFF_FFFF_FFFF)
-            parent_ref = rng.randint(0x0002_0000_0000_0000, 0x0004_FFFF_FFFF_FFFF)
-
-            record = _build_usn_record(
-                usn=usn,
-                filename=filename,
-                file_ref=file_ref,
-                parent_ref=parent_ref,
-                timestamp=event.timestamp,
-                reason=reason,
-                file_attrs=attrs,
+        
+        fuse_root = ctx.mount.root
+        if not fuse_root.exists():
+            logger.error("FUSE mount point does not exist: %s", fuse_root)
+            return
+        
+        # Locate $UsnJrnl streams
+        usnjrnl_max_path = fuse_root / "$Extend" / "$UsnJrnl:$Max"
+        usnjrnl_j_path = fuse_root / "$Extend" / "$UsnJrnl:$J"
+        
+        # Validate journal exists
+        if not usnjrnl_max_path.exists():
+            logger.error(
+                "$UsnJrnl:$Max not found. Baseline VHDX must complete OOBE first. "
+                "Path: %s",
+                usnjrnl_max_path
             )
-            records.append(record)
-            usn += usn_step + rng.randint(0, 32) * 8
-            seen_events += 1
-
-        return records
+            return
+        
+        if not usnjrnl_j_path.exists():
+            logger.error(
+                "$UsnJrnl:$J not found. Baseline VHDX must complete OOBE first. "
+                "Path: %s",
+                usnjrnl_j_path
+            )
+            return
+        
+        # Read current NextUsn from $Max header
+        try:
+            self._next_usn = self._read_next_usn(usnjrnl_max_path)
+            logger.info("Current NextUsn: 0x%X", self._next_usn)
+        except Exception as exc:
+            logger.error("Failed to read $UsnJrnl:$Max header: %s", exc)
+            return
+        
+        # Collect file operation events
+        file_events = []
+        for event in ctx.scheduler.emit():
+            if event.kind in ("FILE_CREATE", "FILE_MODIFY", "FILE_DELETE", "FILE_RENAME"):
+                file_events.append(event)
+        
+        logger.info("Processing %d file operation events", len(file_events))
+        
+        # Generate USN records
+        usn_records = []
+        for event in file_events:
+            try:
+                record = self._create_usn_record(event)
+                usn_records.append(record)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to create USN record for %s: %s",
+                    event.payload.get("path", "unknown"),
+                    exc
+                )
+        
+        # Append records to $UsnJrnl:$J
+        try:
+            self._append_usn_records(usnjrnl_j_path, usn_records)
+            logger.info("Appended %d USN records to $UsnJrnl:$J", len(usn_records))
+        except Exception as exc:
+            logger.error("Failed to append USN records: %s", exc)
+            return
+        
+        # Update $Max header with new NextUsn
+        try:
+            self._update_next_usn(usnjrnl_max_path, self._next_usn)
+            logger.info("Updated NextUsn to 0x%X", self._next_usn)
+        except Exception as exc:
+            logger.error("Failed to update $UsnJrnl:$Max header: %s", exc)
+            return
+        
+        ctx.audit.log({
+            "operation": "usn_journal_append",
+            "records_written": len(usn_records),
+            "next_usn": self._next_usn,
+        })
+    
+    def _read_next_usn(self, max_path: Path) -> int:
+        """Read NextUsn from $UsnJrnl:$Max header.
+        
+        Args:
+            max_path: Path to $UsnJrnl:$Max stream
+        
+        Returns:
+            Current NextUsn value
+        """
+        with open(max_path, "rb") as f:
+            data = f.read(64)  # $Max header is 64 bytes
+        
+        if len(data) < 64:
+            raise ValueError(f"$Max header too small: {len(data)} bytes")
+        
+        # $Max structure:
+        # +0x00: MaximumSize (DWORDLONG)
+        # +0x08: AllocationDelta (DWORDLONG)
+        # +0x10: UsnId (DWORDLONG)
+        # +0x18: LowestValidUsn (USN)
+        # +0x20: NextUsn (USN)
+        
+        next_usn = struct.unpack_from("<Q", data, 0x20)[0]
+        return next_usn
+    
+    def _update_next_usn(self, max_path: Path, next_usn: int) -> None:
+        """Update NextUsn in $UsnJrnl:$Max header.
+        
+        Args:
+            max_path: Path to $UsnJrnl:$Max stream
+            next_usn: New NextUsn value
+        """
+        with open(max_path, "r+b") as f:
+            # Seek to NextUsn field (offset 0x20)
+            f.seek(0x20)
+            f.write(struct.pack("<Q", next_usn))
+    
+    def _create_usn_record(self, event) -> UsnRecordV3:
+        """Create a USN_RECORD_V3 from a scheduler event.
+        
+        Args:
+            event: Scheduler event (FILE_CREATE, FILE_MODIFY, etc.)
+        
+        Returns:
+            USN_RECORD_V3 structure
+        """
+        # Extract file path and name
+        path = event.payload.get("path", "")
+        file_name = Path(path).name if path else "unknown"
+        
+        # Determine reason flags based on event kind
+        reason = 0
+        if event.kind == "FILE_CREATE":
+            reason = USN_REASON_FILE_CREATE | USN_REASON_DATA_EXTEND | USN_REASON_CLOSE
+        elif event.kind == "FILE_MODIFY":
+            reason = USN_REASON_DATA_OVERWRITE | USN_REASON_CLOSE
+        elif event.kind == "FILE_DELETE":
+            reason = USN_REASON_FILE_DELETE | USN_REASON_CLOSE
+        elif event.kind == "FILE_RENAME":
+            reason = USN_REASON_RENAME_NEW_NAME | USN_REASON_CLOSE
+        else:
+            reason = USN_REASON_CLOSE
+        
+        # Create record
+        record = UsnRecordV3(
+            record_length=0,  # Will be calculated in to_bytes()
+            file_reference_number=self._next_file_ref,
+            parent_file_reference_number=self._next_file_ref - 1,  # Simplified
+            usn=self._next_usn,
+            timestamp=_datetime_to_filetime(event.timestamp),
+            reason=reason,
+            source_info=0,
+            security_id=0,
+            file_attributes=FILE_ATTRIBUTE_ARCHIVE,
+            file_name=file_name
+        )
+        
+        # Increment counters
+        record_bytes = record.to_bytes()
+        self._next_usn += len(record_bytes)
+        self._next_file_ref += 1
+        
+        return record
+    
+    def _append_usn_records(self, j_path: Path, records: List[UsnRecordV3]) -> None:
+        """Append USN records to $UsnJrnl:$J stream.
+        
+        Args:
+            j_path: Path to $UsnJrnl:$J stream
+            records: List of USN_RECORD_V3 structures to append
+        """
+        with open(j_path, "ab") as f:
+            for record in records:
+                record_bytes = record.to_bytes()
+                f.write(record_bytes)
