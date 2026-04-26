@@ -126,6 +126,29 @@ class PromptBuilder:
 
     _PROMPTS: Optional[Dict[str, str]] = None
 
+    # Fallback templates used when system_prompts.json is absent.
+    _DEFAULT_PROMPTS: Dict[str, str] = {
+        "document_content": (
+            "Generate realistic content for '{doc_name}' (type: {doc_type}). "
+            "{extra_context}"
+            "Write ONLY the document content, no commentary."
+        ),
+        "email_subject": (
+            "Generate a realistic email subject for {sender_name} at {organization}."
+        ),
+        "search_terms": "Generate {count} realistic web search terms.",
+        "bookmark_titles": "Generate {count} realistic browser bookmark titles.",
+        "download_filename": "Generate a realistic download filename for: {description}.",
+        "event_log_message": (
+            "Generate a realistic Windows Event Log message. "
+            "Type: {event_type}. Source: {source}."
+        ),
+        "file_names": (
+            "Generate {count} realistic filenames for the '{file_category}' category."
+        ),
+        "web_agent_prompt": "You are helping generate realistic web browsing data. File: {file_name}.",
+    }
+
     @classmethod
     def _load_prompts(cls) -> Dict[str, str]:
         if cls._PROMPTS is None:
@@ -134,11 +157,13 @@ class PromptBuilder:
             prompts_file = Path(__file__).resolve().parent.parent / "system_prompts.json"
             try:
                 with open(prompts_file, "r", encoding="utf-8") as f:
-                    cls._PROMPTS = json.load(f)
+                    loaded = json.load(f)
+                    # Merge: file values override defaults
+                    cls._PROMPTS = {**cls._DEFAULT_PROMPTS, **loaded}
             except Exception as e:
                 logger.error("Failed to load system_prompts.json: %s", e)
-                cls._PROMPTS = {}
-        return cls._PROMPTS or {}
+                cls._PROMPTS = dict(cls._DEFAULT_PROMPTS)
+        return cls._PROMPTS or dict(cls._DEFAULT_PROMPTS)
 
     @classmethod
     def _persona(cls, profile_type: str) -> str:

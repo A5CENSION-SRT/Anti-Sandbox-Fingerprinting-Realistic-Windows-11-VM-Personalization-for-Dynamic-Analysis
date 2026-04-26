@@ -164,6 +164,49 @@ class HiveWriter(BaseService):
 
     # -- public API ---------------------------------------------------------
 
+    def preflight_hive_logs(self, hive_rel_paths: Sequence[str]) -> None:
+        """Pre-flight check: verify .LOG1 / .LOG2 companion files are deletable.
+
+        Windows replays the transaction log on next mount if the log files
+        survive, rolling back all hivex writes (R28, ADR-010).  This check
+        must be called before any hive is opened for writing.
+
+        Args:
+            hive_rel_paths: Relative paths to the hives that will be written.
+
+        Raises:
+            HiveWriterError: If any log file exists but cannot be deleted,
+                indicating a permissions problem that would cause a boot loop.
+        """
+        for rel in hive_rel_paths:
+            try:
+                hive_abs = self._resolve_hive_path(rel)
+            except HiveWriterError:
+                # Hive may not exist yet (creation path) — that's fine.
+                continue
+            for suffix in (".LOG1", ".LOG2"):
+                log_path = hive_abs.parent / (hive_abs.name + suffix)
+                if not log_path.exists():
+                    continue
+                # Probe: can we delete it? Try rename-then-rename-back.
+                probe = log_path.with_suffix(".LOG_probe")
+                try:
+                    log_path.rename(probe)
+                    probe.rename(log_path)
+                except OSError as exc:
+                    self._audit_logger.log({
+                        "service": self.service_name,
+                        "operation": "preflight_log_check_failed",
+                        "log_path": str(log_path),
+                        "error": str(exc),
+                    })
+                    raise HiveWriterError(
+                        f"Cannot delete hive log {log_path}: {exc}. "
+                        "This will cause Windows to replay the log on next mount, "
+                        "rolling back all hive writes (R28). Aborting."
+                    ) from exc
+        logger.debug("Preflight hive-log check passed for %d hive(s)", len(list(hive_rel_paths)))
+
     def execute_operations(self, operations: Sequence[HiveOperation]) -> None:
         """Execute a batch of registry operations grouped by hive file.
 
@@ -284,7 +327,7 @@ class HiveWriter(BaseService):
             except Exception:
                 pass
 
-        # ADR-010: delete .LOG1 / .LOG2 to prevent Windows replay
+        # ADR-010: delete .LOG1 / .LOG2 to prevent Windows replay (A19)
         for suffix in (".LOG1", ".LOG2"):
             log_path = hive_abs.parent / (hive_abs.name + suffix)
             if log_path.exists():
@@ -293,6 +336,13 @@ class HiveWriter(BaseService):
                     logger.debug("Deleted hive log: %s", log_path)
                 except OSError as exc:
                     logger.warning("Could not delete hive log %s: %s", log_path, exc)
+                    self._audit_logger.log({
+                        "service": self.service_name,
+                        "operation": "hive_log_deletion_failed",
+                        "log_path": str(log_path),
+                        "error": str(exc),
+                        "risk": "R28: Windows may replay log on next mount, rolling back hive writes",
+                    })
 
         logger.info("Applied %d operation(s) to %s", len(operations), hive_abs.name)
 

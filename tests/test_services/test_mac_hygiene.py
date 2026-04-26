@@ -341,12 +341,16 @@ class TestDeriveMacDeterminism:
 # ---------------------------------------------------------------------------
 
 class TestApplyCallsExecuteOperations:
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
     def test_apply_calls_execute_operations(
         self, mac_hygiene_vm, vm_mac_hive_writer, persona, audit_logger
     ):
         """apply() must call hive_writer.execute_operations() with the built ops."""
         ctx = _make_service_context(persona, vm_mac_hive_writer, audit_logger)
-        mac_hygiene_vm.apply(ctx)
+        mac_hygiene_vm.apply(self.service_ctx)
         vm_mac_hive_writer.execute_operations.assert_called_once()
         ops = vm_mac_hive_writer.execute_operations.call_args[0][0]
         assert len(ops) > 0
@@ -356,7 +360,7 @@ class TestApplyCallsExecuteOperations:
     ):
         """When no adapters need replacement, execute_operations is NOT called."""
         ctx = _make_service_context(persona, non_vm_mac_hive_writer, audit_logger)
-        mac_hygiene_non_vm.apply(ctx)
+        mac_hygiene_non_vm.apply(self.service_ctx)
         non_vm_mac_hive_writer.execute_operations.assert_not_called()
 
     def test_apply_logs_audit_entry(
@@ -365,7 +369,7 @@ class TestApplyCallsExecuteOperations:
         """apply() must emit an audit log entry recording operations_count."""
         ctx = _make_service_context(persona, vm_mac_hive_writer, audit_logger)
         audit_logger.clear()
-        mac_hygiene_vm.apply(ctx)
+        mac_hygiene_vm.apply(self.service_ctx)
         entries = [e for e in audit_logger.entries if e.get("service") == "MacHygiene"]
         assert len(entries) == 1
         assert entries[0]["operations_count"] > 0
@@ -378,7 +382,7 @@ class TestApplyCallsExecuteOperations:
         service = MacHygiene(vm_mac_hive_writer, audit_logger)
         ctx = _make_service_context(persona, vm_mac_hive_writer, audit_logger)
         with pytest.raises(MacHygieneError, match="disk full"):
-            service.apply(ctx)
+            service.apply(self.service_ctx)
 
     def test_apply_reads_disk_serial_from_bundle(
         self, vm_mac_hive_writer, audit_logger, persona
@@ -389,7 +393,7 @@ class TestApplyCallsExecuteOperations:
             persona, vm_mac_hive_writer, audit_logger,
             disk_serial="UNIQUE-SERIAL-ZZZZ",
         )
-        service.apply(ctx)
+        service.apply(self.service_ctx)
         # Verify execute_operations was called (meaning it found the adapters
         # and computed MACs using the disk_serial from the bundle)
         vm_mac_hive_writer.execute_operations.assert_called_once()

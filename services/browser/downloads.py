@@ -24,6 +24,43 @@ from services.browser.generators.download_generator import (
 
 import sqlite3
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Zone.Identifier ADS helper (R27, A18)
+# ---------------------------------------------------------------------------
+
+_ZONE_ID_TEMPLATE = "[ZoneTransfer]\r\nZoneId=3\r\nReferrerUrl={url}\r\nHostUrl={url}\r\n"
+
+
+def _write_zone_identifier(file_path: Path, url: str) -> bool:
+    """Write a Zone.Identifier ADS alongside *file_path* (ZoneId=3, internet).
+
+    On an ntfs-3g FUSE mount the colon-stream path (``file:Zone.Identifier``)
+    is used.  On a plain host filesystem a ``<file>.Zone.Identifier`` sidecar
+    is written instead so the audit record always exists.
+
+    Returns True if the Zone.Identifier content was written; False on error.
+    """
+    content = _ZONE_ID_TEMPLATE.format(url=url).encode("utf-8")
+    # Try NTFS ADS via colon notation (works under ntfs-3g FUSE)
+    ads_path = Path(str(file_path) + ":Zone.Identifier")
+    try:
+        ads_path.write_bytes(content)
+        return True
+    except (OSError, NotImplementedError):
+        pass
+    # Fallback: sidecar file (readable by tools that strip colons)
+    try:
+        sidecar = file_path.with_suffix(file_path.suffix + ".Zone.Identifier")
+        sidecar.write_bytes(content)
+        return True
+    except OSError as exc:
+        _logger.warning("Zone.Identifier write failed for %s: %s", file_path, exc)
+        return False
+
 
 class BrowserDownloadService(BaseService):
     """Populates browser download records and filesystem stubs.
@@ -85,13 +122,27 @@ class BrowserDownloadService(BaseService):
             os.path.join("Users", user, "Downloads")
         )
         dl_dir.mkdir(parents=True, exist_ok=True)
+        zone_id_count = 0
         for e in entries:
+            file_path = dl_dir / e["filename"]
             create_placeholder_file(dl_dir, e["filename"], e["size_bytes"])
             self._audit.log({
                 "service": self.service_name,
                 "operation": "create_file",
-                "path": str(dl_dir / e["filename"]),
+                "path": str(file_path),
                 "file_type": "download_stub",
+            })
+            # R27: every downloaded file must carry a Zone.Identifier ADS (ZoneId=3)
+            # so forensic tools see it as an internet-sourced file.
+            url = e.get("url", "https://example.com/")
+            if _write_zone_identifier(file_path, url):
+                zone_id_count += 1
+        if zone_id_count:
+            self._audit.log({
+                "service": self.service_name,
+                "operation": "write_zone_identifier",
+                "count": zone_id_count,
+                "zone_id": 3,
             })
 
         # 2. SQLite records in each browser's History DB

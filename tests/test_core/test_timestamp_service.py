@@ -14,7 +14,7 @@ class TestTimestampServiceInit:
         """Service initializes with default parameters."""
         svc = TimestampService(seed="test-seed")
         assert svc._seed == "test-seed"
-        assert svc._timeline_days == 90
+        assert svc._timeline_days == 360
         assert svc._work_start == 9
         assert svc._work_end == 18
 

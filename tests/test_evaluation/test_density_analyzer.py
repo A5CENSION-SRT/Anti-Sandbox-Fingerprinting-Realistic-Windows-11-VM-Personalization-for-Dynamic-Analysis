@@ -79,6 +79,14 @@ class TestAnalyze:
             audit_logger.log({"service": "SystemIdentity"})
         result = analyzer.analyze()
         assert result["registry"].entry_count == 60
+        # 60 < 5000 min baseline (real Win11 numbers per MASTER_PLAN §windows_artifact_baselines)
+        assert result["registry"].meets_minimum is False
+
+    def test_counts_registry_meets_minimum(self, audit_logger, analyzer):
+        for _ in range(5000):
+            audit_logger.log({"service": "SystemIdentity"})
+        result = analyzer.analyze()
+        assert result["registry"].entry_count == 5000
         assert result["registry"].meets_minimum is True
 
     def test_counts_eventlog_entries(self, audit_logger, analyzer):
@@ -86,7 +94,8 @@ class TestAnalyze:
             audit_logger.log({"service": "SecurityLog"})
         result = analyzer.analyze()
         assert result["eventlog"].entry_count == 35
-        assert result["eventlog"].meets_minimum is True
+        # 35 < 1000 min baseline (real Win11 numbers)
+        assert result["eventlog"].meets_minimum is False
 
     def test_counts_browser_entries(self, audit_logger, analyzer):
         audit_logger.log({"service": "BrowserHistory"})
@@ -118,14 +127,14 @@ class TestOverallScore:
         assert analyzer.overall_score() == 0.0
 
     def test_full_coverage_high_score(self, audit_logger, analyzer):
-        # Fill all categories to exactly their typical baseline
-        for _ in range(150):
+        # Fill all categories to their typical baselines (real Win11 numbers)
+        for _ in range(50_000):
             audit_logger.log({"service": "SystemIdentity"})
-        for _ in range(100):
+        for _ in range(10_000):
             audit_logger.log({"service": "SystemLog"})
-        for _ in range(80):
+        for _ in range(10_000):
             audit_logger.log({"service": "OfficeArtifacts"})
-        for _ in range(30):
+        for _ in range(5_000):
             audit_logger.log({"service": "BrowserHistory"})
         score = analyzer.overall_score()
         assert score == 1.0
@@ -144,8 +153,8 @@ class TestOverallScore:
         assert score <= 1.0
 
     def test_partial_coverage_score(self, audit_logger, analyzer):
-        # Fill only registry to its typical level
-        for _ in range(150):
+        # Fill only registry to its typical level (50 000 real Win11 baseline)
+        for _ in range(50_000):
             audit_logger.log({"service": "SystemIdentity"})
         score = analyzer.overall_score()
         # 1 category at 1.0, 3 at 0.0 → 0.25
@@ -163,11 +172,12 @@ class TestSummary:
         assert "Artifact Density Report" in result
 
     def test_summary_contains_pass_fail(self, audit_logger, analyzer):
-        for _ in range(60):
+        # Registry needs ≥5000 entries (real Win11 baseline) to pass
+        for _ in range(5_000):
             audit_logger.log({"service": "SystemIdentity"})
         result = analyzer.summary()
-        assert "PASS" in result  # registry should pass
-        assert "FAIL" in result  # other categories should fail
+        assert "PASS" in result  # registry should pass (5000 ≥ min 5000)
+        assert "FAIL" in result  # other categories should still fail
 
 
 # ---------------------------------------------------------------

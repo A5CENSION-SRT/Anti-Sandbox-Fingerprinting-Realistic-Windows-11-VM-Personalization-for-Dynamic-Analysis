@@ -22,13 +22,13 @@ def _make_persona(**overrides) -> PersonaContext:
         "occupation": "Analyst",
         "age_range": "25-35",
         "interests": PersonaInterests(
-            hobbies=["reading"],
-            professional_topics=["data"],
+            hobbies=["reading", "cycling", "photography"],
+            professional_topics=["data", "analytics"],
             entertainment=["podcasts"],
         ),
         "work_style": PersonaWorkStyle(
             description="focused",
-            typical_tools=["excel"],
+            typical_tools=["excel", "outlook"],
         ),
         "project_names": ["Project A", "Project B", "Project C"],
         "colleague_names": ["Alice", "Bob", "Carol", "Dave", "Eve"],

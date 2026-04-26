@@ -318,12 +318,17 @@ class TestSchemaValidation:
 
 
 class TestServiceInterface:
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
     """Test the BaseService interface compliance."""
 
     def test_service_name(self, writer):
         assert writer.service_name == "CrossWriter"
 
-    def test_apply_context(self, writer, mount_manager):
+    def test_apply_tree_directly(self, writer, mount_manager):
+        """apply_tree() is the public API; apply() delegates to it with empty spec."""
         tree = {
             "ctx.txt": {
                 "type": "file",
@@ -331,5 +336,5 @@ class TestServiceInterface:
                 "timestamp_event": "t",
             }
         }
-        writer.apply({"tree_spec": tree, "base_path": ""})
+        writer.apply_tree(tree, "")
         assert (mount_manager.root / "ctx.txt").read_text() == "via context"

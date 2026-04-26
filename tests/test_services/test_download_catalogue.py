@@ -36,9 +36,10 @@ class TestDownloadCatalogue:
     def test_select_clamps_to_pool_size(self, data_dir):
         cat = load_download_catalogue(data_dir)
         rng = random.Random(42)
-        # pool for developer only has 1 entry
+        # pool for developer is capped at catalogue size
         selected = select_downloads(cat, "developer", rng, 99)
-        assert len(selected) == 1
+        developer_pool = cat.get("developer", [])
+        assert len(selected) == len(developer_pool)
 
     def test_select_falls_back_to_home_user(self, data_dir):
         cat = load_download_catalogue(data_dir)

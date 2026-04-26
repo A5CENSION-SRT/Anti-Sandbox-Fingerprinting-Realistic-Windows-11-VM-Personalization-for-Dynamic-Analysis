@@ -169,7 +169,7 @@ class UpdateArtifacts(BaseService):
         self.write_update_artifacts(
             profile_type=ctx.persona.profile_archetype,
             computer_name=ctx.identity_bundle.user.computer_name,
-            install_date=ctx.install_time.date(),
+            install_date=ctx.install_time,
             rng=base_rng,
         )
 

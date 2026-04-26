@@ -172,13 +172,13 @@ class LinuxMountBackend:
     """
 
     def __init__(self, vhdx_path: Path) -> None:
+        self._vhdx_path = Path(vhdx_path)
+        if not self._vhdx_path.exists():
+            raise FileNotFoundError(f"VHDX image not found: {self._vhdx_path}")
         if not _HAS_GUESTFS:
             raise LinuxMountBackendError(
                 "python3-guestfs required: apt install libguestfs-tools python3-guestfs"
             )
-        self._vhdx_path = Path(vhdx_path)
-        if not self._vhdx_path.exists():
-            raise FileNotFoundError(f"VHDX image not found: {self._vhdx_path}")
         self._g: Optional[object] = None          # guestfs.GuestFS instance
         self._windows_root: Optional[str] = None  # e.g. "/dev/sda2"
         self._fuse_mountpoint: Optional[Path] = None
@@ -201,6 +201,10 @@ class LinuxMountBackend:
         """Launch guestfs appliance, inspect the image, and mount the Windows partition."""
         if self._g is not None:
             return
+        if not _HAS_GUESTFS:
+            raise LinuxMountBackendError(
+                "python3-guestfs required: apt install libguestfs-tools python3-guestfs"
+            )
         g = _guestfs.GuestFS(python_return_dict=True)
         g.set_backend(os.environ.get("LIBGUESTFS_BACKEND", "direct"))
         suffix = self._vhdx_path.suffix.lower()

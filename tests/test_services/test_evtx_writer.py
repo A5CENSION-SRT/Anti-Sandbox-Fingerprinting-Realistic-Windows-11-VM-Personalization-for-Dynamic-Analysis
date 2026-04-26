@@ -164,6 +164,10 @@ class TestEvtxRecord:
 # ---------------------------------------------------------------------------
 
 class TestEvtxWriter:
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
     def test_write_creates_file(self, evtx_writer, mount_dir, sample_record):
         evtx_path = "Windows/System32/winevt/Logs/System.evtx"
         evtx_writer.write_records([sample_record], evtx_path)
@@ -234,7 +238,7 @@ class TestEvtxWriter:
     def test_missing_evtx_path_is_noop(self, evtx_writer):
         # When evtx_path is absent, apply() is a no-op because
         # individual log services call write_records() directly.
-        evtx_writer.apply({"records": []})  # should not raise
+        evtx_writer.apply(self.service_ctx)  # should not raise
 
     def test_path_escape_raises(self, evtx_writer, sample_record):
         with pytest.raises(EvtxWriterError):
@@ -264,9 +268,13 @@ class TestEvtxWriter:
 
 
 class TestEvtxWriterMissingPath:
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
     def test_apply_no_evtx_path_is_noop(self, evtx_writer, audit_logger):
         """When evtx_path is missing, apply() should be a no-op (not raise)."""
         # This is intentional: individual log services call write_records() directly
-        evtx_writer.apply({"records": []})
+        evtx_writer.apply(self.service_ctx)
         # No audit entries should be created for no-op
         assert len(audit_logger.entries) == 0

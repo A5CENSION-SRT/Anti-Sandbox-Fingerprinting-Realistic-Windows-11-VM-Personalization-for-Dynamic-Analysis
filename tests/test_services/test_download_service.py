@@ -28,10 +28,14 @@ def _make_svc(mount_manager, timestamp_service, audit_logger,
 
 class TestFilesystemStubs:
 
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
     def test_downloads_folder_created(self, mount_manager, timestamp_service,
                                       audit_logger, data_dir):
         svc = _make_svc(mount_manager, timestamp_service, audit_logger, data_dir)
-        svc.apply({"username": "TestUser", "timeline_days": 10})
+        svc.apply(self.service_ctx)
         dl = mount_manager.root / "Users" / "TestUser" / "Downloads"
         assert dl.is_dir()
 
@@ -39,7 +43,7 @@ class TestFilesystemStubs:
                                         audit_logger, data_dir):
         svc = _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
                         count=2)
-        svc.apply({"username": "TestUser", "timeline_days": 10})
+        svc.apply(self.service_ctx)
         dl = mount_manager.root / "Users" / "TestUser" / "Downloads"
         assert len(list(dl.iterdir())) == 2
 
@@ -47,7 +51,7 @@ class TestFilesystemStubs:
                                       audit_logger, data_dir):
         svc = _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
                         count=2)
-        svc.apply({"username": "TestUser", "timeline_days": 10})
+        svc.apply(self.service_ctx)
         dl = mount_manager.root / "Users" / "TestUser" / "Downloads"
         names = {f.name for f in dl.iterdir()}
         assert any(n.endswith((".exe", ".pdf", ".zip", ".msi")) for n in names)
@@ -60,13 +64,17 @@ class TestFilesystemStubs:
 class TestDbRecords:
 
     @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
+    @pytest.fixture(autouse=True)
     def setup(self, history_db):
         """Ensure History DB exists before each test."""
 
     def test_download_rows_inserted(self, mount_manager, timestamp_service,
                                     audit_logger, data_dir):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=2).apply({"username": "TestUser", "timeline_days": 10})
+                  count=2).apply(self.service_ctx)
         conn = sqlite3.connect(str(chrome_history_db(mount_manager)))
         try:
             assert conn.execute(
@@ -77,7 +85,7 @@ class TestDbRecords:
     def test_url_chains_inserted(self, mount_manager, timestamp_service,
                                   audit_logger, data_dir):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=2).apply({"username": "TestUser", "timeline_days": 10})
+                  count=2).apply(self.service_ctx)
         conn = sqlite3.connect(str(chrome_history_db(mount_manager)))
         try:
             assert conn.execute(
@@ -89,7 +97,7 @@ class TestDbRecords:
     def test_timestamps_chrome_epoch(self, mount_manager, timestamp_service,
                                      audit_logger, data_dir):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=1).apply({"username": "TestUser", "timeline_days": 10})
+                  count=1).apply(self.service_ctx)
         conn = sqlite3.connect(str(chrome_history_db(mount_manager)))
         try:
             row = conn.execute(
@@ -103,7 +111,7 @@ class TestDbRecords:
     def test_state_is_complete(self, mount_manager, timestamp_service,
                                audit_logger, data_dir):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=1).apply({"username": "TestUser", "timeline_days": 10})
+                  count=1).apply(self.service_ctx)
         conn = sqlite3.connect(str(chrome_history_db(mount_manager)))
         try:
             state = conn.execute(
@@ -115,7 +123,7 @@ class TestDbRecords:
     def test_path_contains_username_and_downloads(
             self, mount_manager, timestamp_service, audit_logger, data_dir):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=1).apply({"username": "TestUser", "timeline_days": 10})
+                  count=1).apply(self.service_ctx)
         conn = sqlite3.connect(str(chrome_history_db(mount_manager)))
         try:
             path = conn.execute(
@@ -127,7 +135,7 @@ class TestDbRecords:
     def test_received_equals_total_bytes(self, mount_manager, timestamp_service,
                                          audit_logger, data_dir):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=2).apply({"username": "TestUser", "timeline_days": 10})
+                  count=2).apply(self.service_ctx)
         conn = sqlite3.connect(str(chrome_history_db(mount_manager)))
         try:
             for recv, total in conn.execute(
@@ -143,6 +151,10 @@ class TestDbRecords:
 
 class TestServiceInterface:
 
+    @pytest.fixture(autouse=True)
+    def _inject_service_ctx(self, service_ctx):
+        self.service_ctx = service_ctx
+
     def test_service_name(self, mount_manager, timestamp_service,
                           audit_logger, data_dir):
         svc = _make_svc(mount_manager, timestamp_service, audit_logger, data_dir)
@@ -151,6 +163,6 @@ class TestServiceInterface:
     def test_audit_logged(self, mount_manager, timestamp_service,
                           audit_logger, data_dir, history_db):
         _make_svc(mount_manager, timestamp_service, audit_logger, data_dir,
-                  count=1).apply({"username": "TestUser", "timeline_days": 5})
+                  count=1).apply(self.service_ctx)
         svcs = {e["service"] for e in audit_logger.entries}
         assert "BrowserDownloads" in svcs
