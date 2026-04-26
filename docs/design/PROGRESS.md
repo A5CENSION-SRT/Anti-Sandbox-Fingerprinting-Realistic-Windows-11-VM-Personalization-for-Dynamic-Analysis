@@ -61,21 +61,31 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 
 ## Current Phase
 
-### 🔄 Phase 3: NTFS Services (67% complete)
+### ✅ Phase 3: NTFS Services (100% complete)
 
-**Status**: 2 of 3 tasks complete  
+**Status**: 3 of 3 tasks complete  
 **Completed**:
 - ✅ Task 3.1: MftTimestampPatcher - Sets $STANDARD_INFORMATION timestamps
 - ✅ Task 3.2: UsnJournalWriter - Appends records to $UsnJrnl:$J
+- ✅ Task 3.3: LogfileWriter - $LogFile stub generation
 
-**Remaining**:
-- Task 3.3: LogfileWriter (optional) - $LogFile stub generation
+### ✅ Phase 4: Baseline VHDX Automation (100% complete)
+
+**Status**: 3 of 3 tasks complete  
+**Completed**:
+- ✅ Task 4.1: build_baseline_vhdx.sh - Automated VHDX creation script
+- ✅ Task 4.2: unattend.xml - Windows 11 unattended installation template
+- ✅ Task 4.3: validate_baseline.sh - Baseline validation script
+
+**Commits**:
+- `0142d45`: Add automated baseline VHDX build script for Linux host
+- `7cbe406`: Add Windows 11 unattended installation template for baseline VHDX
+- `19b580d`: Add baseline VHDX validation script with comprehensive checks
 
 **Next Steps**:
-1. Optionally implement LogfileWriter (0.5 days)
-2. Move to Phase 4: Baseline VHDX Automation
-3. Create build_baseline_vhdx.sh script
-4. Create unattend.xml template
+1. Move to Phase 5: Testing
+2. Write unit tests for all new code (>80% coverage)
+3. Write integration tests for end-to-end workflows
 
 ---
 
@@ -86,14 +96,14 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 | 0 | Preparation | - | 🟢 Complete | 100% |
 | 1 | Core Infrastructure | 4 | 🟢 Complete | 100% |
 | 2 | Service Layer Updates | 2 | 🟢 Complete | 100% |
-| 3 | NTFS Services | 3 | 🟡 In Progress | 67% |
-| 4 | Baseline VHDX Automation | 3 | ⚪ Not Started | 0% |
+| 3 | NTFS Services | 3 | 🟢 Complete | 100% |
+| 4 | Baseline VHDX Automation | 3 | 🟢 Complete | 100% |
 | 5 | Testing | 2 | ⚪ Not Started | 0% |
 | 6 | Documentation | 3 | ⚪ Not Started | 0% |
 | 7 | Deployment | 2 | ⚪ Not Started | 0% |
 | 8 | Validation | 2 | ⚪ Not Started | 0% |
 
-**Overall Progress**: 45% (Phases 0-2 complete, Phase 3 in progress)
+**Overall Progress**: 65% (Phases 0-4 complete, Phase 5 next)
 
 ---
 
@@ -111,17 +121,17 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 - [ ] Task 2.1: Update cross_writer.py to Remove pywin32 (1 day)
 - [ ] Task 2.2: Update hive_writer.py to Use Hivex (2 days)
 
-### Phase 3: NTFS Services (2/3 complete)
+### Phase 3: NTFS Services (3/3 complete)
 
 - [x] Task 3.1: Implement MftTimestampPatcher (1.5 days) ✅ Complete
 - [x] Task 3.2: Implement UsnJournalWriter (2 days) ✅ Complete
-- [ ] Task 3.3: Implement LogfileWriter (0.5 days, optional)
+- [x] Task 3.3: Implement LogfileWriter (0.5 days, optional) ✅ Complete
 
-### Phase 4: Baseline VHDX Automation (0/3 complete)
+### Phase 4: Baseline VHDX Automation (3/3 complete)
 
-- [ ] Task 4.1: Create Baseline Build Script (1 day)
-- [ ] Task 4.2: Create Unattend.xml Template (1 day)
-- [ ] Task 4.3: Create Baseline Validation Script (1 day)
+- [x] Task 4.1: Create Baseline Build Script (1 day) ✅ Complete
+- [x] Task 4.2: Create Unattend.xml Template (1 day) ✅ Complete
+- [x] Task 4.3: Create Baseline Validation Script (1 day) ✅ Complete
 
 ### Phase 5: Testing (0/2 complete)
 
@@ -284,3 +294,11 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 **Last Updated**: 2024-01-15  
 **Updated By**: AI Assistant  
 **Next Review**: 2024-01-22
+
+**Recent Updates**:
+- Completed Phase 3: NTFS Services (all 3 tasks including optional LogfileWriter)
+- Completed Phase 4: Baseline VHDX Automation (all 3 tasks)
+- Created automated baseline build script with virt-install
+- Created Windows 11 unattended installation template
+- Created comprehensive baseline validation script
+- Overall progress: 65% (Phases 0-4 complete)
