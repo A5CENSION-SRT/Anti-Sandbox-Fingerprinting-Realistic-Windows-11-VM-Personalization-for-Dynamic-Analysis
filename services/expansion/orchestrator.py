@@ -26,9 +26,11 @@ from services.expansion.bundle import (
     ExpansionBundle,
     MediaDescriptor,
 )
-from services.ai.seed_generators.registry import RegistrySeedGenerator
-from services.ai.seed_generators.evtx import EvtxSeedGenerator
-from services.ai.seed_generators.prefetch import PrefetchSeedGenerator
+def _get_seed_generators():
+    from services.ai.seed_generators.registry import RegistrySeedGenerator
+    from services.ai.seed_generators.evtx import EvtxSeedGenerator
+    from services.ai.seed_generators.prefetch import PrefetchSeedGenerator
+    return RegistrySeedGenerator, EvtxSeedGenerator, PrefetchSeedGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,9 @@ class ExpansionOrchestrator(BaseService):
     builds the ExpansionBundle and stores it in ctx.expansion.
     """
 
+    def __init__(self, scale_config: Optional[Dict[str, Any]] = None) -> None:
+        self._scale_config: Dict[str, Any] = scale_config or {}
+
     @property
     def service_name(self) -> str:
         return "ExpansionOrchestrator"
@@ -56,7 +61,7 @@ class ExpansionOrchestrator(BaseService):
     def apply(self, ctx: "ServiceContext") -> None:
         persona = ctx.persona
         rng = ctx.rng
-        config: Dict[str, Any] = {}
+        config: Dict[str, Any] = self._scale_config
         timeline_days = persona.timeline_days
 
         bundle = self.expand(
@@ -66,6 +71,7 @@ class ExpansionOrchestrator(BaseService):
         )
 
         # Generate artifact seeds with offline fallback (no Gemini client required)
+        RegistrySeedGenerator, EvtxSeedGenerator, PrefetchSeedGenerator = _get_seed_generators()
         registry_seed = RegistrySeedGenerator(timeline_days=timeline_days).generate(persona)
         evtx_seed = EvtxSeedGenerator(timeline_days=timeline_days).generate(persona)
         prefetch_seed = PrefetchSeedGenerator(timeline_days=timeline_days).generate(persona)
@@ -119,9 +125,9 @@ class ExpansionOrchestrator(BaseService):
         url_count  = max(1, round(url_rate  * timeline * jitter(0.5)))
 
         username = persona.username.split(".")[0].capitalize()
-        documents = self._gen_documents(docs_count, rng, username, archetype)
-        downloads = self._gen_downloads(dl_count, rng, username, archetype)
-        media     = self._gen_media(pic_count, rng, username, archetype)
+        documents = self._gen_documents(docs_count, rng, username, archetype, timeline)
+        downloads = self._gen_downloads(dl_count, rng, username, archetype, timeline)
+        media     = self._gen_media(pic_count, rng, username, archetype, timeline)
         browsing  = self._gen_browsing(url_count, rng, persona)
 
         return ExpansionBundle(
@@ -146,6 +152,7 @@ class ExpansionOrchestrator(BaseService):
         rng: Random,
         username: str,
         archetype: str,
+        timeline: float = 360.0,
     ) -> List[DocumentDescriptor]:
         exts = {
             "developer":  [".md", ".txt", ".py", ".json"],
@@ -168,6 +175,7 @@ class ExpansionOrchestrator(BaseService):
                 relative_path=rel,
                 content=content,
                 event_type="document_edit",
+                timestamp_offset_days=rng.uniform(0.0, timeline),
             ))
         return result
 
@@ -177,6 +185,7 @@ class ExpansionOrchestrator(BaseService):
         rng: Random,
         username: str,
         archetype: str,
+        timeline: float = 360.0,
     ) -> List[DownloadDescriptor]:
         result = []
         for i in range(count):
@@ -188,6 +197,7 @@ class ExpansionOrchestrator(BaseService):
                 content=b"",
                 source_url=f"https://example.com/files/{name}",
                 event_type="file_download",
+                timestamp_offset_days=rng.uniform(0.0, timeline),
             ))
         return result
 
@@ -197,6 +207,7 @@ class ExpansionOrchestrator(BaseService):
         rng: Random,
         username: str,
         archetype: str,
+        timeline: float = 360.0,
     ) -> List[MediaDescriptor]:
         result = []
         for i in range(count):
@@ -217,6 +228,7 @@ class ExpansionOrchestrator(BaseService):
                 content=_JPEG_STUB if media_type == "image" else b"",
                 media_type=media_type,
                 event_type="media_view",
+                timestamp_offset_days=rng.uniform(0.0, timeline),
             ))
         return result
 

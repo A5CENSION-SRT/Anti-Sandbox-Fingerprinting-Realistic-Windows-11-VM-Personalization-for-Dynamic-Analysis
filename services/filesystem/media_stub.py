@@ -193,18 +193,33 @@ class MediaStubService(BaseService):
         created_files = 0
 
         try:
-            media_config = _PROFILE_MEDIA.get(profile_type, {})
+            # Primary path: expansion bundle media descriptors
+            if ctx.expansion is not None and ctx.expansion.media:
+                from datetime import timedelta as _td
+                install_time = ctx.install_time
+                for desc in ctx.expansion.media:
+                    rel_path = Path(
+                        str(desc.relative_path).replace("{username}", username)
+                    )
+                    content = desc.content if desc.content else self._generate_media_stub(
+                        desc.media_type, rng, (10000, 50000)
+                    )
+                    if install_time is not None and getattr(desc, "timestamp_offset_days", -1.0) >= 0.0:
+                        ts = install_time + _td(days=desc.timestamp_offset_days)
+                        self._write_file(rel_path, content, override_ts=ts)
+                    else:
+                        self._write_file(rel_path, content, event_type="media_created")
+                    created_files += 1
 
+            # Fallback: hardcoded profile-specific media
+            media_config = _PROFILE_MEDIA.get(profile_type, {})
             for folder, files in media_config.items():
                 for file_spec in files:
-                    # Randomly skip some files for variety
                     if rng.random() < 0.15:
                         continue
-
                     file_path = user_root / folder / file_spec["name"]
                     file_type = file_spec["type"]
                     size_range = file_spec.get("size", (10000, 50000))
-
                     content = self._generate_media_stub(file_type, rng, size_range)
                     self._write_file(file_path, content)
                     created_files += 1
@@ -231,20 +246,19 @@ class MediaStubService(BaseService):
         rel_path: Path,
         content: bytes,
         event_type: str = "media_created",
+        override_ts=None,
     ) -> None:
-        """Write file content to the mounted filesystem and apply timestamps.
-
-        Args:
-            rel_path: Path relative to mount root.
-            content: Binary content to write.
-            event_type: Event type for timestamp generation.
-        """
+        """Write file content to the mounted filesystem and apply timestamps."""
+        from datetime import datetime as _dt
         full_path = self._mount.resolve(str(rel_path))
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(content)
 
-        # Apply realistic timestamps from the timeline
-        self._apply_timestamps(full_path, event_type)
+        if override_ts is not None:
+            unix_ts = override_ts.timestamp()
+            os.utime(str(full_path), (unix_ts, unix_ts))
+        else:
+            self._apply_timestamps(full_path, event_type)
 
         self._audit.log({
             "service": self.service_name,
@@ -255,14 +269,8 @@ class MediaStubService(BaseService):
         })
 
     def _apply_timestamps(self, path: Path, event_type: str) -> None:
-        """Apply created/modified/accessed timestamps from the timestamp service.
-
-        Args:
-            path: Absolute path to the file.
-            event_type: Event type for timestamp generation.
-        """
+        """Apply created/modified/accessed timestamps from the timestamp service."""
         timestamps = self._ts.get_timestamp(event_type)
-
         accessed = timestamps["accessed"].timestamp()
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))

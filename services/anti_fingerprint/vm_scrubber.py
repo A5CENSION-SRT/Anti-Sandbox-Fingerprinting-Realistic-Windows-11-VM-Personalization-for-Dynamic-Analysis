@@ -106,6 +106,7 @@ _VM_SERVICE_KEYS: List[str] = [
     r"ControlSet001\Services\VBoxGuest",
     r"ControlSet001\Services\VBoxMouse",
     r"ControlSet001\Services\VBoxVideo",
+    r"ControlSet001\Services\VBoxService",
     r"ControlSet001\Services\VBoxNetFlt",
     r"ControlSet001\Services\VBoxNetAdp",
     # VMware
@@ -120,15 +121,26 @@ _VM_SERVICE_KEYS: List[str] = [
     # Hyper-V
     r"ControlSet001\Services\hv_vmbus",
     r"ControlSet001\Services\hvservice",
-    # QEMU / KVM / VirtIO (Phase 7)
+    # QEMU / KVM / VirtIO
     r"ControlSet001\Services\vioscsi",
     r"ControlSet001\Services\viostor",
     r"ControlSet001\Services\viomem",
     r"ControlSet001\Services\vioser",
     r"ControlSet001\Services\vioball",
+    r"ControlSet001\Services\netkvm",
+    r"ControlSet001\Services\balloon",
+    r"ControlSet001\Services\pvpanic",
+    r"ControlSet001\Services\spice-vdagent",
     r"ControlSet001\Services\qemu-ga",
     r"ControlSet001\Services\kvm",
-    r"ControlSet001\Services\kbdclass",
+    # ACPI VM device IDs
+    r"ControlSet001\Enum\ACPI\VBOX0001",
+    r"ControlSet001\Enum\ACPI\VMW0001",
+    r"ControlSet001\Enum\ACPI\QEMU0002",
+    # VM virtual disk identifiers
+    r"ControlSet001\Enum\SCSI\DiskQEMU_HARDDISK___",
+    r"ControlSet001\Enum\SCSI\DiskVBOX_HARDDISK___",
+    r"ControlSet001\Enum\IDE\DiskVBOX_HARDDISK___",
 ]
 
 # ---------------------------------------------------------------------------
@@ -139,32 +151,38 @@ _VM_SOFTWARE_KEYS: List[str] = [
     r"VMware, Inc.\VMware Tools",
     r"VMware, Inc.",
     r"Oracle\VirtualBox Guest Additions",
+    r"QEMU",
     r"Microsoft\Virtual Machine\Guest\Parameters",
-    # Uninstall entries for VM tools (Phase 7)
+    # Uninstall entries for VM tools
     r"Microsoft\Windows\CurrentVersion\Uninstall\Oracle VM VirtualBox Guest Additions",
     r"Microsoft\Windows\CurrentVersion\Uninstall\VMware Tools",
     r"Microsoft\Windows\CurrentVersion\Uninstall\QEMU Guest Agent",
+    r"Microsoft\Windows\CurrentVersion\Uninstall\{VBox*}",
+    r"Microsoft\Windows\CurrentVersion\Uninstall\{VMware*}",
 ]
 
 # ---------------------------------------------------------------------------
-# String values to patch in SYSTEM hive (key_path, value_name, replacement)
+# String values to patch in SYSTEM hive (key_path, value_name)
 # ---------------------------------------------------------------------------
 
-# Replacement is a placeholder; actual value comes from hardware_models.json
+# Replacement comes from hardware_models.json
 _SYSTEM_IDENTITY_PATCHES: List[Tuple[str, str]] = [
-    (
-        r"ControlSet001\Control\SystemInformation",
-        "SystemManufacturer",
-    ),
-    (
-        r"ControlSet001\Control\SystemInformation",
-        "SystemProductName",
-    ),
-    (
-        r"ControlSet001\Control\SystemInformation",
-        "BIOSVersion",
-    ),
+    (r"ControlSet001\Control\SystemInformation", "SystemManufacturer"),
+    (r"ControlSet001\Control\SystemInformation", "SystemProductName"),
+    (r"ControlSet001\Control\SystemInformation", "BIOSVersion"),
+    # HARDWARE\DESCRIPTION paths (volatile; patched for defence-in-depth)
+    (r"ControlSet001\Control\BIOS", "BIOSVendor"),
+    (r"ControlSet001\Control\BIOS", "BIOSVersion"),
+    (r"ControlSet001\Control\BIOS", "BIOSReleaseDate"),
+    (r"ControlSet001\Control\BIOS", "SystemManufacturer"),
+    (r"ControlSet001\Control\BIOS", "SystemProductName"),
 ]
+
+# SCSI disk identifier patches in SYSTEM hive
+_SCSI_DISK_KEY_PREFIX = r"ControlSet001\Enum\SCSI"
+_QEMU_DISK_IDENTIFIER = "QEMU HARDDISK"
+_VBOX_DISK_IDENTIFIER = "VBOX HARDDISK"
+_REALISTIC_DISK_IDENTIFIER = "Samsung SSD 970 EVO Plus 1000GB"
 
 # Hardware data file
 _HW_DATA_FILE: str = "hardware_models.json"
@@ -344,10 +362,17 @@ class VmScrubber(BaseService):
         ops: List[HiveOperation] = []
         vendor_group = rng.choice(self._hw_data["system_vendors"])
 
+        bios_vendor = vendor_group["bios_vendor"]
+        motherboard = rng.choice(vendor_group["motherboard_models"])
+        bios_version = rng.choice(vendor_group["bios_versions"])
+        bios_date = vendor_group.get("bios_date", "12/01/2022")
+
         replacements: Dict[str, str] = {
-            "SystemManufacturer": vendor_group["bios_vendor"],
-            "SystemProductName": rng.choice(vendor_group["motherboard_models"]),
-            "BIOSVersion": rng.choice(vendor_group["bios_versions"]),
+            "SystemManufacturer": bios_vendor,
+            "SystemProductName": motherboard,
+            "BIOSVersion": bios_version,
+            "BIOSVendor": bios_vendor,
+            "BIOSReleaseDate": bios_date,
         }
 
         for key_path, value_name in _SYSTEM_IDENTITY_PATCHES:
@@ -356,11 +381,10 @@ class VmScrubber(BaseService):
                     _SYSTEM_HIVE, key_path, value_name
                 )
             except HiveWriterError:
-                # Key/value doesn't exist — nothing to patch
                 continue
 
             if self._contains_vm_string(str(current)):
-                replacement = replacements[value_name]
+                replacement = replacements.get(value_name, bios_vendor)
                 ops.append(HiveOperation(
                     hive_path=_SYSTEM_HIVE,
                     key_path=key_path,

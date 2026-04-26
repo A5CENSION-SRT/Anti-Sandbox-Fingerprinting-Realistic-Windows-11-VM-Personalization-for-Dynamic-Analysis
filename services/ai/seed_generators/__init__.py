@@ -4,15 +4,6 @@ Each generator produces 10-50 "seeds" via Gemini that are then expanded
 into thousands of artifacts by the local permutation engines.
 """
 
-from services.ai.seed_generators.downloads import DownloadSeedGenerator
-from services.ai.seed_generators.documents import DocumentSeedGenerator
-from services.ai.seed_generators.browsing import BrowsingSeedGenerator
-from services.ai.seed_generators.filenames import FilenameSeedGenerator
-from services.ai.seed_generators.registry import RegistrySeedGenerator
-from services.ai.seed_generators.evtx import EvtxSeedGenerator
-from services.ai.seed_generators.prefetch import PrefetchSeedGenerator
-from services.ai.seed_generators.media import MediaSeedGenerator
-
 __all__ = [
     "DownloadSeedGenerator",
     "DocumentSeedGenerator",
@@ -23,3 +14,22 @@ __all__ = [
     "PrefetchSeedGenerator",
     "MediaSeedGenerator",
 ]
+
+
+def __getattr__(name):
+    _map = {
+        "DownloadSeedGenerator": ("services.ai.seed_generators.downloads", "DownloadSeedGenerator"),
+        "DocumentSeedGenerator": ("services.ai.seed_generators.documents", "DocumentSeedGenerator"),
+        "BrowsingSeedGenerator": ("services.ai.seed_generators.browsing", "BrowsingSeedGenerator"),
+        "FilenameSeedGenerator": ("services.ai.seed_generators.filenames", "FilenameSeedGenerator"),
+        "RegistrySeedGenerator": ("services.ai.seed_generators.registry", "RegistrySeedGenerator"),
+        "EvtxSeedGenerator": ("services.ai.seed_generators.evtx", "EvtxSeedGenerator"),
+        "PrefetchSeedGenerator": ("services.ai.seed_generators.prefetch", "PrefetchSeedGenerator"),
+        "MediaSeedGenerator": ("services.ai.seed_generators.media", "MediaSeedGenerator"),
+    }
+    if name in _map:
+        module_path, class_name = _map[name]
+        import importlib
+        mod = importlib.import_module(module_path)
+        return getattr(mod, class_name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

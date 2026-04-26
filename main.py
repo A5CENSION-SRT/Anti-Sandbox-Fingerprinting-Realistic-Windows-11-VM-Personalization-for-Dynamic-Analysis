@@ -112,6 +112,9 @@ _SERVICE_MODULES = {
         ("services.ntfs.usn_journal_writer", "UsnJournalWriter"),
         ("services.ntfs.logfile_writer", "LogfileWriter"),
     ],
+    "evaluation": [
+        ("services.filesystem.system_content_populator", "SystemContentPopulator"),
+    ],
 }
 
 

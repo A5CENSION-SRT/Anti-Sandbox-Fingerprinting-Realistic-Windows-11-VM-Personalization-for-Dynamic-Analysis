@@ -1,29 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -m pytest tests/ -x --tb=short -q)",
-      "Bash(python3 -m pytest tests/ -x --tb=short -q)",
-      "Bash(pip3 install *)",
-      "Bash(python -m pytest tests/test_services/test_mft_timestamp_patcher.py -x -q)",
-      "Bash(python3 -m pytest tests/test_services/test_mft_timestamp_patcher.py -x -q)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_mft_timestamp_patcher.py -x -q)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_usn_journal_writer.py -x -q)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_mac_hygiene.py -x -q)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/ -q --tb=short)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_download_service.py -q --tb=short)",
-      "Bash(git -C /mnt/c/Users/sumuk/Documents/Repositories/Anti-Sandbox-Fingerprinting-Realistic-Windows-11-VM-Personalization-for-Dynamic-Analysis stash)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_download_service.py -q --tb=no)",
-      "Bash(git *)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_mft_timestamp_patcher.py tests/test_services/test_usn_journal_writer.py tests/test_services/test_mac_hygiene.py -v --tb=short)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/Scripts/pytest.exe tests/test_services/test_mft_timestamp_patcher.py tests/test_services/test_usn_journal_writer.py tests/test_services/test_mac_hygiene.py --tb=short -q)",
-      "Bash(pip install *)",
-      "Bash(python3 -m pip install pydantic pyyaml faker)",
-      "Bash(python3 -m ensurepip)",
-      "Bash(python3 -m pip --version)",
-      "Bash(python3.12 -c \"import pydantic; print\\(pydantic.VERSION\\)\")",
-      "Read(//home/sumukha/.local/**)",
-      "Bash(/mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/python.exe -c ' *)",
-      "Bash(PYTHONPATH=/mnt/c/Users/sumuk/Documents/Repositories/Anti-Sandbox-Fingerprinting-Realistic-Windows-11-VM-Personalization-for-Dynamic-Analysis /mnt/c/Users/sumuk/AppData/Local/Programs/Python/Python311/python.exe *)"
+      "Bash(*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)"
     ]
   }
 }

@@ -30,7 +30,7 @@ _CHROME_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
 _FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=timezone.utc)
 
 # Default timeline parameters
-_DEFAULT_TIMELINE_DAYS: int = 90
+_DEFAULT_TIMELINE_DAYS: int = 360
 _DEFAULT_WORK_START: int = 9
 _DEFAULT_WORK_END: int = 18
 _DEFAULT_ACTIVE_DAYS: List[int] = [0, 1, 2, 3, 4]  # Mon-Fri

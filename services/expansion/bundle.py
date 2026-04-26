@@ -13,6 +13,7 @@ class DocumentDescriptor:
     content: bytes               # file content (may be header stub)
     event_type: str = "document_edit"
     attributes: List[str] = field(default_factory=list)
+    timestamp_offset_days: float = -1.0  # days since install_time; -1 = use TimestampService
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class DownloadDescriptor:
     content: bytes
     source_url: str = ""
     event_type: str = "file_download"
+    timestamp_offset_days: float = -1.0
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,7 @@ class MediaDescriptor:
     content: bytes
     media_type: str = "image"    # "image" | "audio" | "video"
     event_type: str = "media_view"
+    timestamp_offset_days: float = -1.0
 
 
 @dataclass(frozen=True)

@@ -89,7 +89,8 @@ class FilenameSeedGenerator:
     def _generate_fallback_seeds(self, persona: PersonaContext) -> List[FilenameSeed]:
         """Generate fallback seeds when API is unavailable."""
         logger.warning("Using fallback filename patterns for %s", persona.full_name)
-        
+        td = persona.timeline_days
+
         return [
             # Work documents
             FilenameSeed(
@@ -104,9 +105,9 @@ class FilenameSeedGenerator:
                 date_formats=["%Y%m%d", "%Y-%m-%d"],
                 version_styles=["v{n}", "_v{n}"],
                 suffix_options=["", "_DRAFT", "_Final", "_reviewed"],
-                expansion=ExpansionRule(target_count=300, date_range_days=90),
+                expansion=ExpansionRule(target_count=max(300, round(td * 0.83)), date_range_days=td),
             ),
-            
+
             # Meeting notes
             FilenameSeed(
                 seed_id="fn_meeting",
@@ -119,9 +120,9 @@ class FilenameSeedGenerator:
                 date_formats=["%Y%m%d", "%B_%d"],
                 version_styles=[],
                 suffix_options=[""],
-                expansion=ExpansionRule(target_count=200, date_range_days=90),
+                expansion=ExpansionRule(target_count=max(200, round(td * 0.56)), date_range_days=td),
             ),
-            
+
             # Photos
             FilenameSeed(
                 seed_id="fn_photo",
@@ -131,9 +132,9 @@ class FilenameSeedGenerator:
                 date_formats=["%Y%m%d"],
                 version_styles=[],
                 suffix_options=[""],
-                expansion=ExpansionRule(target_count=500, date_range_days=90),
+                expansion=ExpansionRule(target_count=max(500, round(td * 1.39)), date_range_days=td),
             ),
-            
+
             # Screenshots
             FilenameSeed(
                 seed_id="fn_screenshot",
@@ -143,9 +144,9 @@ class FilenameSeedGenerator:
                 date_formats=["%Y-%m-%d"],
                 version_styles=[],
                 suffix_options=[""],
-                expansion=ExpansionRule(target_count=100, date_range_days=90),
+                expansion=ExpansionRule(target_count=max(100, round(td * 0.28)), date_range_days=td),
             ),
-            
+
             # Downloads
             FilenameSeed(
                 seed_id="fn_download",
@@ -157,9 +158,9 @@ class FilenameSeedGenerator:
                 date_formats=[],
                 version_styles=["_{n}", "-{n}"],
                 suffix_options=["", "_x64", "_win64"],
-                expansion=ExpansionRule(target_count=50, date_range_days=90),
+                expansion=ExpansionRule(target_count=max(50, round(td * 0.14)), date_range_days=td),
             ),
-            
+
             # Spreadsheets
             FilenameSeed(
                 seed_id="fn_spreadsheet",
@@ -173,9 +174,9 @@ class FilenameSeedGenerator:
                 date_formats=[],
                 version_styles=["v{n}"],
                 suffix_options=["", "_Final", "_DRAFT"],
-                expansion=ExpansionRule(target_count=150, date_range_days=180),
+                expansion=ExpansionRule(target_count=max(150, round(td * 0.42)), date_range_days=td),
             ),
-            
+
             # PDFs
             FilenameSeed(
                 seed_id="fn_pdf",
@@ -187,6 +188,6 @@ class FilenameSeedGenerator:
                 date_formats=["%Y%m%d", "%Y-%m-%d"],
                 version_styles=[],
                 suffix_options=["", "_signed", "_final"],
-                expansion=ExpansionRule(target_count=100, date_range_days=90),
+                expansion=ExpansionRule(target_count=max(100, round(td * 0.28)), date_range_days=td),
             ),
         ]

@@ -1,0 +1,62 @@
+name: ARC CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  gates:
+    name: Static gates + tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      # A1 — no datetime.now() or datetime.utcnow() in service/core code
+      - name: Gate A1 — no bare datetime.now calls
+        run: |
+          ! grep -rn "datetime\.now()\|datetime\.utcnow()" \
+            core/ services/ \
+            --include="*.py" \
+            --exclude="timestamp_service.py" \
+            --exclude="time_utils.py"
+
+      # A2 — no win32 / winreg imports outside allowed list
+      - name: Gate A2 — no win32 imports
+        run: |
+          ! grep -rn "^import win32\|^from win32\|import winreg\|from winreg" \
+            core/ services/ \
+            --include="*.py"
+
+      # A3 — no PowerShell subprocess calls in Python source
+      - name: Gate A3 — no PowerShell invocations
+        run: |
+          ! grep -rn "powershell\|PowerShell\|pwsh" \
+            core/ services/ \
+            --include="*.py"
+
+      # A4 — no old context dict pattern (ctx["key"]) in service apply() methods
+      - name: Gate A4 — no ctx dict access
+        run: |
+          ! grep -rn 'ctx\["' \
+            services/ \
+            --include="*.py"
+
+      - name: Run pytest (unit tests only)
+        run: |
+          python -m pytest tests/ -x -q \
+            --ignore=tests/test_core/test_linux_mount.py \
+            --tb=short

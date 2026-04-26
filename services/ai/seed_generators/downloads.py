@@ -95,9 +95,10 @@ class DownloadSeedGenerator:
     def _generate_fallback_seeds(self, persona: PersonaContext) -> List[DownloadSeed]:
         """Generate fallback seeds when API is unavailable."""
         logger.warning("Using fallback download seeds for %s", persona.full_name)
-        
+
         profile_type = self._infer_profile_type(persona)
-        
+        td = persona.timeline_days
+
         fallback_seeds = {
             "developer": [
                 DownloadSeed(
@@ -109,7 +110,7 @@ class DownloadSeedGenerator:
                     size_range_bytes=(26000000, 30000000),
                     context="Python installer downloads",
                     variables={"version": ["3.11.0", "3.11.5", "3.12.0", "3.12.1", "3.12.2"]},
-                    expansion=ExpansionRule(target_count=30, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(30, round(td * 0.083)), date_range_days=td),
                 ),
                 DownloadSeed(
                     seed_id="dl_dev_002",
@@ -120,7 +121,7 @@ class DownloadSeedGenerator:
                     size_range_bytes=(80000000, 95000000),
                     context="VS Code updates",
                     variables={"version": ["1.85.0", "1.85.1", "1.86.0", "1.86.1", "1.87.0"]},
-                    expansion=ExpansionRule(target_count=25, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(25, round(td * 0.069)), date_range_days=td),
                 ),
                 DownloadSeed(
                     seed_id="dl_dev_003",
@@ -134,7 +135,7 @@ class DownloadSeedGenerator:
                         "owner": ["microsoft", "facebook", "google", "torvalds"],
                         "repo": ["vscode", "react", "tensorflow", "linux"],
                     },
-                    expansion=ExpansionRule(target_count=50, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(50, round(td * 0.139)), date_range_days=td),
                 ),
             ],
             "office_user": [
@@ -151,7 +152,7 @@ class DownloadSeedGenerator:
                         "quarter": ["Q1", "Q2", "Q3", "Q4"],
                         "year": ["2023", "2024"],
                     },
-                    expansion=ExpansionRule(target_count=100, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(100, round(td * 0.278)), date_range_days=td),
                 ),
                 DownloadSeed(
                     seed_id="dl_office_002",
@@ -162,7 +163,7 @@ class DownloadSeedGenerator:
                     size_range_bytes=(100000000, 120000000),
                     context="Microsoft Teams installer",
                     variables={"version": ["24.1.0.21", "24.2.0.15", "24.3.0.10"]},
-                    expansion=ExpansionRule(target_count=15, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(15, round(td * 0.042)), date_range_days=td),
                 ),
             ],
             "home_user": [
@@ -175,7 +176,7 @@ class DownloadSeedGenerator:
                     size_range_bytes=(45000000, 50000000),
                     context="Spotify installer",
                     variables={},
-                    expansion=ExpansionRule(target_count=10, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(10, round(td * 0.028)), date_range_days=td),
                 ),
                 DownloadSeed(
                     seed_id="dl_home_002",
@@ -186,11 +187,11 @@ class DownloadSeedGenerator:
                     size_range_bytes=(50000, 200000),
                     context="Amazon order invoices",
                     variables={"order_id": ["113-1234567", "114-2345678", "115-3456789"]},
-                    expansion=ExpansionRule(target_count=50, date_range_days=90),
+                    expansion=ExpansionRule(target_count=max(50, round(td * 0.139)), date_range_days=td),
                 ),
             ],
         }
-        
+
         return fallback_seeds.get(profile_type, fallback_seeds["home_user"])
     
     def _infer_profile_type(self, persona: PersonaContext) -> str:

@@ -11,7 +11,14 @@ Phases:
               rolling its own timeline.
 """
 
-from services.expansion.bundle import ExpansionBundle
-from services.expansion.orchestrator import ExpansionOrchestrator
-
 __all__ = ["ExpansionBundle", "ExpansionOrchestrator"]
+
+
+def __getattr__(name):
+    if name == "ExpansionBundle":
+        from services.expansion.bundle import ExpansionBundle
+        return ExpansionBundle
+    if name == "ExpansionOrchestrator":
+        from services.expansion.orchestrator import ExpansionOrchestrator
+        return ExpansionOrchestrator
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

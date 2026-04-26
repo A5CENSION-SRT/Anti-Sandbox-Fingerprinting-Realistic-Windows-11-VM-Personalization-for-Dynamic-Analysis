@@ -35,20 +35,20 @@ logger = logging.getLogger(__name__)
 
 _REFERENCE_BASELINE: Dict[str, Dict[str, int]] = {
     "registry": {
-        "min_entries": 50,
-        "typical_entries": 150,
+        "min_entries": 5_000,
+        "typical_entries": 50_000,
     },
     "eventlog": {
-        "min_entries": 30,
-        "typical_entries": 100,
+        "min_entries": 1_000,
+        "typical_entries": 10_000,
     },
     "filesystem": {
-        "min_entries": 20,
-        "typical_entries": 80,
+        "min_entries": 1_000,
+        "typical_entries": 10_000,
     },
     "browser": {
-        "min_entries": 5,
-        "typical_entries": 30,
+        "min_entries": 500,
+        "typical_entries": 5_000,
     },
 }
 

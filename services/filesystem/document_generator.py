@@ -326,12 +326,13 @@ class DocumentGenerator(BaseService):
                if ctx.scheduler else Random(hash(seed + profile_type)))
         from core.time_utils import sched_now as _sched_now
         sched_now = _sched_now(ctx)
+        install_time = ctx.install_time
         created_files = 0
 
         try:
             if ctx.expansion is not None and ctx.expansion.documents:
                 created_files = self._write_expansion_documents(
-                    ctx.expansion.documents, username, rng, sched_now
+                    ctx.expansion.documents, username, rng, sched_now, install_time
                 )
             else:
                 created_files = self._write_hardcoded_documents(
@@ -361,17 +362,29 @@ class DocumentGenerator(BaseService):
         username: str,
         rng: Random,
         now: datetime | None = None,
+        install_time: datetime | None = None,
     ) -> int:
         """Write document files from ExpansionBundle descriptors.
 
+        Each descriptor carries ``timestamp_offset_days`` — days since
+        ``install_time`` when the file was "created" in the persona timeline.
+        This drives both the POSIX mtime (set via os.utime) and, on a FUSE-
+        mounted NTFS volume, the $STANDARD_INFORMATION timestamps patched
+        later by MftTimestampPatcher.
+
         Args:
-            descriptors: List of DocumentDescriptor from the expansion bundle.
-            username:    Windows username (for path substitution).
-            rng:         RNG for content generation.
+            descriptors:  List of DocumentDescriptor from the expansion bundle.
+            username:     Windows username (for path substitution).
+            rng:          RNG for content generation.
+            now:          Scheduler's "now" datetime.
+            install_time: OS install datetime; used to compute absolute
+                          timestamps from descriptor offset_days.
 
         Returns:
             Number of files written.
         """
+        from datetime import timedelta as _td
+
         written = 0
         for desc in descriptors:
             rel_path = Path(
@@ -390,7 +403,12 @@ class DocumentGenerator(BaseService):
             else:
                 raw = self._generate_text_content("notes", rng, now).encode("utf-8")
 
-            self._write_file(rel_path, raw)
+            # Determine per-descriptor timestamp
+            if install_time is not None and desc.timestamp_offset_days >= 0.0:
+                ts = install_time + _td(days=desc.timestamp_offset_days)
+                self._write_file(rel_path, raw, event_type=desc.event_type, override_ts=ts)
+            else:
+                self._write_file(rel_path, raw, event_type=desc.event_type)
             written += 1
 
         return written
@@ -447,20 +465,26 @@ class DocumentGenerator(BaseService):
         rel_path: Path,
         content: bytes,
         event_type: str = "document_created",
+        override_ts: Optional[datetime] = None,
     ) -> None:
         """Write file content to the mounted filesystem and apply timestamps.
 
         Args:
-            rel_path: Path relative to mount root.
-            content: Binary content to write.
-            event_type: Event type for timestamp generation.
+            rel_path:    Path relative to mount root.
+            content:     Binary content to write.
+            event_type:  Event type for timestamp generation (used when no override).
+            override_ts: If given, set atime/mtime to this exact datetime instead
+                         of sampling from TimestampService.
         """
         full_path = self._mount.resolve(str(rel_path))
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_bytes(content)
 
-        # Apply realistic timestamps from the timeline
-        self._apply_timestamps(full_path, event_type)
+        if override_ts is not None:
+            unix_ts = override_ts.timestamp()
+            os.utime(str(full_path), (unix_ts, unix_ts))
+        else:
+            self._apply_timestamps(full_path, event_type)
 
         self._audit.log({
             "service": self.service_name,
@@ -471,14 +495,8 @@ class DocumentGenerator(BaseService):
         })
 
     def _apply_timestamps(self, path: Path, event_type: str) -> None:
-        """Apply created/modified/accessed timestamps from the timestamp service.
-
-        Args:
-            path: Absolute path to the file.
-            event_type: Event type for timestamp generation.
-        """
+        """Apply created/modified/accessed timestamps from the timestamp service."""
         timestamps = self._ts.get_timestamp(event_type)
-
         accessed = timestamps["accessed"].timestamp()
         modified = timestamps["modified"].timestamp()
         os.utime(str(path), (accessed, modified))

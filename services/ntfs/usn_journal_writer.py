@@ -58,6 +58,14 @@ from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
 
+
+def _iter_expansion_descriptors(bundle: Any):
+    """Yield file-bearing descriptors from an ExpansionBundle."""
+    yield from getattr(bundle, "documents", [])
+    yield from getattr(bundle, "downloads", [])
+    yield from getattr(bundle, "media", [])
+
+
 _FILETIME_EPOCH: int = 116_444_736_000_000_000
 
 # USN reason flags
@@ -192,7 +200,9 @@ class UsnJournalWriter(BaseService):
         logger.info("USN journal: wrote %d records", len(records))
 
     def _build_records(self, ctx: "ServiceContext") -> List[bytes]:
-        """Build USN_RECORD_V2 payloads from scheduler events."""
+        """Build USN_RECORD_V2 payloads from scheduler events and expansion files."""
+        from datetime import timedelta
+
         rng = (
             ctx.scheduler.child_rng("UsnJournal")
             if ctx.scheduler
@@ -200,17 +210,15 @@ class UsnJournalWriter(BaseService):
         )
         records: List[bytes] = []
         usn: int = rng.randint(0x0001_0000_0000, 0x000F_0000_0000)
-        usn_step: int = 64  # typical journal step size
-
-        # Root directory reference
-        root_ref: int = 0x0005_0000_0000_0005
+        usn_step: int = 64
 
         event_types = {
-            "FILE_CREATE": (_USN_FILE_CREATE | _USN_CLOSE, 0x20),     # archive
+            "FILE_CREATE": (_USN_FILE_CREATE | _USN_CLOSE, 0x20),
             "FILE_MODIFY": (_USN_DATA_EXTEND | _USN_CLOSE, 0x20),
             "FILE_DELETE": (_USN_FILE_DELETE | _USN_CLOSE, 0x20),
         }
 
+        # -- Pass 1: scheduler event paths ------------------------------------
         seen_events = 0
         for event in ctx.scheduler.events_of("FILE_CREATE", "FILE_MODIFY", "FILE_DELETE"):
             if seen_events >= _MAX_RECORDS:
@@ -220,24 +228,40 @@ class UsnJournalWriter(BaseService):
             if not rel_path:
                 continue
 
-            event_kind = event.kind
-            reason, attrs = event_types.get(event_kind, (_USN_DATA_OVERWRITE | _USN_CLOSE, 0x20))
-
+            reason, attrs = event_types.get(event.kind, (_USN_DATA_OVERWRITE | _USN_CLOSE, 0x20))
             filename = Path(rel_path).name
             file_ref = rng.randint(0x0002_0000_0000_0000, 0x0004_FFFF_FFFF_FFFF)
             parent_ref = rng.randint(0x0002_0000_0000_0000, 0x0004_FFFF_FFFF_FFFF)
 
-            record = _build_usn_record(
-                usn=usn,
-                filename=filename,
-                file_ref=file_ref,
-                parent_ref=parent_ref,
-                timestamp=event.timestamp,
-                reason=reason,
-                file_attrs=attrs,
-            )
-            records.append(record)
+            records.append(_build_usn_record(
+                usn=usn, filename=filename, file_ref=file_ref,
+                parent_ref=parent_ref, timestamp=event.timestamp,
+                reason=reason, file_attrs=attrs,
+            ))
             usn += usn_step + rng.randint(0, 32) * 8
             seen_events += 1
+
+        # -- Pass 2: expansion bundle file descriptors ------------------------
+        if ctx.expansion is not None and ctx.scheduler is not None:
+            install_time = ctx.scheduler.install_time
+            for desc in _iter_expansion_descriptors(ctx.expansion):
+                if seen_events >= _MAX_RECORDS:
+                    break
+                offset = getattr(desc, "timestamp_offset_days", -1.0)
+                if offset < 0.0:
+                    continue
+                ts = install_time + timedelta(days=offset)
+                filename = Path(desc.relative_path).name
+                file_ref = rng.randint(0x0002_0000_0000_0000, 0x0004_FFFF_FFFF_FFFF)
+                parent_ref = rng.randint(0x0002_0000_0000_0000, 0x0004_FFFF_FFFF_FFFF)
+
+                records.append(_build_usn_record(
+                    usn=usn, filename=filename, file_ref=file_ref,
+                    parent_ref=parent_ref, timestamp=ts,
+                    reason=_USN_FILE_CREATE | _USN_CLOSE,
+                    file_attrs=0x20,
+                ))
+                usn += usn_step + rng.randint(0, 32) * 8
+                seen_events += 1
 
         return records

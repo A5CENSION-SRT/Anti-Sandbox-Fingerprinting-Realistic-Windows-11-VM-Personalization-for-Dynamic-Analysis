@@ -29,7 +29,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_CONFIG = PROJECT_ROOT / "config.yaml"
 OUTPUT = PROJECT_ROOT / "output"
 AUDIT = PROJECT_ROOT / "audit.log"
-TIMELINE_DAYS = 90
+TIMELINE_DAYS = 360
 
 
 def parse_args() -> argparse.Namespace:
@@ -142,11 +142,11 @@ def resolve_runtime_paths(
         deduped_audit_candidates[0],
     )
 
-    timeline_days = cfg.get("timeline_days", 90)
+    timeline_days = cfg.get("timeline_days", 360)
     try:
         timeline_days = int(timeline_days)
     except (TypeError, ValueError):
-        timeline_days = 90
+        timeline_days = 360
 
     return output_path, audit_path, timeline_days
 

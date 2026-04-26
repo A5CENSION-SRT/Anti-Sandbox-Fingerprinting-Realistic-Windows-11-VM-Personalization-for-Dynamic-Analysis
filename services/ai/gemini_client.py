@@ -567,7 +567,7 @@ class GeminiClient:
 
             expansion = {
                 "target_count": max(1, min(_as_int(expansion_raw.get("target_count"), 50), 1000)),
-                "date_range_days": max(1, min(_as_int(expansion_raw.get("date_range_days"), 90), 365)),
+                "date_range_days": max(1, min(_as_int(expansion_raw.get("date_range_days"), 360), 730)),
                 "include_versions": bool(expansion_raw.get("include_versions", True)),
                 "include_drafts": bool(expansion_raw.get("include_drafts", True)),
                 "include_dates": bool(expansion_raw.get("include_dates", True)),

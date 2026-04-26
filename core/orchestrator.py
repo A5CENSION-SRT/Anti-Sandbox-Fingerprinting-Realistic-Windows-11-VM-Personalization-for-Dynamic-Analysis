@@ -154,7 +154,8 @@ _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     "UserDirectoryService": ExecutionPhase.INFRASTRUCTURE,
     # Expansion (Phase 2) — seeds → artifact bundles
     "ExpansionOrchestrator": ExecutionPhase.EXPANSION,
-    # Filesystem
+    # Filesystem — keys match service_name properties exactly
+    "InstalledAppsStub": ExecutionPhase.FILESYSTEM,
     "DocumentGenerator": ExecutionPhase.FILESYSTEM,
     "MediaStubService": ExecutionPhase.FILESYSTEM,
     "OfficeMruService": ExecutionPhase.FILESYSTEM,
@@ -164,6 +165,7 @@ _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     "ThumbnailCacheService": ExecutionPhase.FILESYSTEM,
     "RecentItemsService": ExecutionPhase.FILESYSTEM,
     "RecycleBinService": ExecutionPhase.FILESYSTEM,
+    "CrossWriter": ExecutionPhase.FILESYSTEM,
     # Registry
     "HiveWriter": ExecutionPhase.REGISTRY,
     "InstalledPrograms": ExecutionPhase.REGISTRY,
@@ -171,12 +173,12 @@ _SERVICE_PHASES: Dict[str, ExecutionPhase] = {
     "NetworkProfiles": ExecutionPhase.REGISTRY,
     "SystemIdentity": ExecutionPhase.REGISTRY,
     "UserAssist": ExecutionPhase.REGISTRY,
-    # Browser
-    "BrowserProfileService": ExecutionPhase.BROWSER,
+    # Browser — names match service_name return values
+    "BrowserProfile": ExecutionPhase.BROWSER,
     "BookmarksService": ExecutionPhase.BROWSER,
-    "BrowserHistoryService": ExecutionPhase.BROWSER,
-    "CookiesCacheService": ExecutionPhase.BROWSER,
-    "BrowserDownloadService": ExecutionPhase.BROWSER,
+    "BrowserHistory": ExecutionPhase.BROWSER,
+    "CookiesCache": ExecutionPhase.BROWSER,
+    "BrowserDownloads": ExecutionPhase.BROWSER,
     # Applications
     "DevEnvironment": ExecutionPhase.APPLICATIONS,
     "OfficeArtifacts": ExecutionPhase.APPLICATIONS,
@@ -495,6 +497,7 @@ class Orchestrator:
                 "audit_logger": self._audit,
                 "data_dir": Path(self._config.get("data_dir", "data")),
                 "templates_dir": Path(self._config.get("templates_dir", "templates")),
+                "scale_config": self._config.get("artifact_scale", {}),
                 "profile_name": (
                     self._ctx.persona.profile_archetype
                     if self._ctx else "home_user"

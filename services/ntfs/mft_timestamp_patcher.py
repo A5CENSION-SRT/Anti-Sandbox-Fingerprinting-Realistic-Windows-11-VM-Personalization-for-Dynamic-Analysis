@@ -27,11 +27,18 @@ import os
 import struct
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 from services.base_service import BaseService
 
 logger = logging.getLogger(__name__)
+
+
+def _iter_file_descriptors(bundle: Any) -> Generator:
+    """Yield all file-bearing descriptors from an ExpansionBundle."""
+    yield from getattr(bundle, "documents", [])
+    yield from getattr(bundle, "downloads", [])
+    yield from getattr(bundle, "media", [])
 
 _FILETIME_EPOCH: int = 116_444_736_000_000_000
 
@@ -87,10 +94,16 @@ class MftTimestampPatcher(BaseService):
         return "MftTimestampPatcher"
 
     def apply(self, ctx: "ServiceContext") -> None:
-        """Patch SI timestamps for all FILE_CREATE / FILE_MODIFY events.
+        """Patch SI timestamps for scheduler events AND expansion bundle files.
 
-        Silently skips files that do not exist on the mounted filesystem
-        (they may be registry-only or were never written by other services).
+        Pass 1: scheduler FILE_CREATE / FILE_MODIFY events — patches any file
+                whose path appears in the event payload.
+        Pass 2: ctx.expansion descriptors — patches every DocumentDescriptor,
+                DownloadDescriptor, and MediaDescriptor that carries a
+                ``timestamp_offset_days`` value, using the scheduler's
+                install_time as the timeline anchor.
+
+        Silently skips files that do not exist on the mounted filesystem.
 
         Raises:
             MftTimestampPatcherError: On fatal xattr write error.
@@ -103,48 +116,27 @@ class MftTimestampPatcher(BaseService):
         skipped = 0
         failed = 0
 
+        # -- Pass 1: scheduler event paths ------------------------------------
         for event in ctx.scheduler.events_of("FILE_CREATE", "FILE_MODIFY"):
             rel_path: Optional[str] = (event.payload or {}).get("path")
             if not rel_path:
                 skipped += 1
                 continue
 
-            try:
-                host_path = self._mount.resolve(rel_path)
-            except Exception:
-                skipped += 1
-                continue
+            p, s, f = self._patch_one(rel_path, event.timestamp)
+            patched += p; skipped += s; failed += f
 
-            if not host_path.exists():
-                skipped += 1
-                continue
-
-            ts = event.timestamp
-            # creation = timestamp of the event; access slightly later
-            access_ts = ts + timedelta(seconds=1)
-
-            xattr_value = _pack_ntfs_times(
-                creation=ts,
-                modify=ts,
-                mft_change=ts,
-                access=access_ts,
-            )
-
-            try:
-                os.setxattr(str(host_path), _NTFS_TIMES_XATTR, xattr_value)
-                patched += 1
-            except OSError as exc:
-                # On non-NTFS / non-FUSE filesystems this silently fails.
-                if exc.errno in (95, 1):  # ENOTSUP, EPERM — not an ntfs-3g mount
-                    logger.debug(
-                        "setxattr not supported on %s (errno=%d); "
-                        "ensure ntfs-3g FUSE mount is active",
-                        host_path, exc.errno,
-                    )
+        # -- Pass 2: expansion bundle descriptors -----------------------------
+        if ctx.expansion is not None:
+            install_time = ctx.scheduler.install_time
+            for desc in _iter_file_descriptors(ctx.expansion):
+                offset = getattr(desc, "timestamp_offset_days", -1.0)
+                if offset < 0.0:
                     skipped += 1
-                else:
-                    logger.warning("setxattr failed for %s: %s", host_path, exc)
-                    failed += 1
+                    continue
+                ts = install_time + timedelta(days=offset)
+                p, s, f = self._patch_one(desc.relative_path, ts)
+                patched += p; skipped += s; failed += f
 
         self._audit_logger.log({
             "service": self.service_name,
@@ -163,3 +155,39 @@ class MftTimestampPatcher(BaseService):
                 f"Too many setxattr failures ({failed}); "
                 "check that ntfs-3g FUSE mount is active"
             )
+
+    def _patch_one(self, rel_path: str, ts: datetime) -> tuple:
+        """Attempt to patch SI timestamps on one file.
+
+        Returns:
+            (patched, skipped, failed) increment tuple.
+        """
+        try:
+            host_path = self._mount.resolve(rel_path)
+        except Exception:
+            return 0, 1, 0
+
+        if not host_path.exists():
+            return 0, 1, 0
+
+        access_ts = ts + timedelta(seconds=1)
+        xattr_value = _pack_ntfs_times(
+            creation=ts,
+            modify=ts,
+            mft_change=ts,
+            access=access_ts,
+        )
+
+        try:
+            os.setxattr(str(host_path), _NTFS_TIMES_XATTR, xattr_value)
+            return 1, 0, 0
+        except OSError as exc:
+            if exc.errno in (95, 1):  # ENOTSUP, EPERM — not ntfs-3g FUSE
+                logger.debug(
+                    "setxattr not supported on %s (errno=%d); "
+                    "ensure ntfs-3g FUSE mount is active",
+                    host_path, exc.errno,
+                )
+                return 0, 1, 0
+            logger.warning("setxattr failed for %s: %s", host_path, exc)
+            return 0, 0, 1
