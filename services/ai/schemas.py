@@ -415,7 +415,7 @@ class ProfileSeeds(BaseModel):
         description="When seeds were generated (set explicitly at generation time)"
     )
     gemini_model: str = Field(
-        default="gemini-2.0-flash",
+        default="gemini-3.1-flash-lite-preview",
         description="Model used for generation"
     )
 

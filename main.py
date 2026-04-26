@@ -506,7 +506,7 @@ def _build_ai_persona(
         gemini_cfg = config.get("ai", {}).get("gemini", {})
         client = GeminiClient(
             api_key=api_key,
-            model=gemini_cfg.get("model", "gemini-2.0-flash"),
+            model=gemini_cfg.get("model", "gemini-3.1-flash-lite-preview"),
             temperature=gemini_cfg.get("temperature", 0.7),
         )
         generator = PersonaGenerator(client)
@@ -545,7 +545,7 @@ def _build_ai_persona(
 
         import yaml as _yaml
         with out_path.open("w", encoding="utf-8") as fh:
-            _yaml.safe_dump(persona.model_dump(), fh, allow_unicode=True, sort_keys=False)
+            _yaml.safe_dump(persona.model_dump(mode="json"), fh, allow_unicode=True, sort_keys=False)
 
         config["profile_path"] = str(out_path)
         if not args.override_username:

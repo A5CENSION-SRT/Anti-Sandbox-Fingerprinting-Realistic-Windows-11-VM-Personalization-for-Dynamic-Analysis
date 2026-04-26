@@ -120,10 +120,11 @@ def _create_minimal_hive(path: Path) -> None:
     hive_data[cell_off + 76:cell_off + 76 + len(root_name)] = root_name
 
     # ── Free cell for remaining space
-    used = _HIVE_BIN_HEADER_SIZE + cell_size + 4  # +4 for cell size field
+    # cell_size already includes the 4-byte size field, so no extra +4 here
+    used = _HIVE_BIN_HEADER_SIZE + cell_size
     remaining = bin_data_size - used
     if remaining > 4:
-        free_off = cell_off + 4 + cell_size
+        free_off = cell_off + cell_size
         struct.pack_into("<i", hive_data, free_off, remaining)
 
     path.write_bytes(bytes(hive_data))

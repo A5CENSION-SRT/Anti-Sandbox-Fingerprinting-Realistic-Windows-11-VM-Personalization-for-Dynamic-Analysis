@@ -195,7 +195,7 @@ class GeminiClient:
     
     Args:
         api_key: Gemini API key (or set GEMINI_API_KEY env var).
-        model: Model name (default: gemini-2.0-flash).
+        model: Model name (default: gemini-3.1-flash-lite-preview).
         temperature: Generation temperature (0.0-1.0).
         max_retries: Maximum retry attempts for transient errors.
         cache_dir: Directory for response caching (None = no caching).
@@ -213,7 +213,7 @@ class GeminiClient:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-2.0-flash",
+        model: str = "gemini-3.1-flash-lite-preview",
         temperature: float = 0.7,
         max_retries: int = 3,
         cache_dir: Optional[Path] = None,
@@ -227,7 +227,7 @@ class GeminiClient:
                 "pass api_key to constructor. Client will fail on API calls."
             )
         
-        self._model = model
+        self._model = os.environ.get("GEMINI_MODEL", model)
         self._temperature = temperature
         self._max_retries = max_retries
         
@@ -641,6 +641,18 @@ class GeminiClient:
             except Exception as e:
                 last_error = e
                 error_str = str(e).lower()
+
+                if "api_key_invalid" in error_str or "api key not valid" in error_str:
+                    raise GeminiAPIError(
+                        "Gemini API key is invalid. Use a valid AI Studio key and set "
+                        "GEMINI_API_KEY for this shell/session."
+                    ) from e
+
+                if "model" in error_str and any(x in error_str for x in ["not found", "unknown", "unsupported"]):
+                    raise GeminiAPIError(
+                        f"Gemini model '{self._model}' is unavailable for this key/project. "
+                        "Set ai.gemini.model (or GEMINI_MODEL) to a supported model."
+                    ) from e
                 
                 # Check if retryable
                 if any(x in error_str for x in ["rate", "quota", "429", "503"]):

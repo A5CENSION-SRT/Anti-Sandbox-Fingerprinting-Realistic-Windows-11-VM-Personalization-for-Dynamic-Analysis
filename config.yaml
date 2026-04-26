@@ -36,8 +36,8 @@ ai:
     # api_key: "your-api-key-here"
     
     # Model selection
-    # Options: gemini-2.0-flash (fast/cheap), gemini-1.5-pro (quality)
-    model: "gemini-2.0-flash"
+    # Example: gemini-3.1-flash-lite-preview (fast/cheap)
+    model: "gemini-3.1-flash-lite-preview"
     
     # Generation temperature (0.0 = deterministic, 1.0 = creative)
     temperature: 0.7
