@@ -32,18 +32,50 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 - Created 21 implementation tasks across 8 phases
 - Estimated 15-20 days total effort
 
+### ✅ Milestone 2: Core Infrastructure (2024-01-15)
+
+**Deliverables**:
+- [x] LinuxMountBackend implementation (already existed)
+- [x] MountManager backend delegation (already existed)
+- [x] Windows dependencies removed (already done)
+
+**Status**: Phase 1 and Phase 2 were already complete in the codebase
+
+### ✅ Milestone 3: NTFS Services - Part 1 (2024-01-15)
+
+**Deliverables**:
+- [x] MftTimestampPatcher service
+- [x] UsnJournalWriter service
+
+**Commits**:
+- `1f67e25`: Implement NTFS MftTimestampPatcher service
+- `8c35708`: Implement NTFS UsnJournalWriter service
+
+**Key Achievements**:
+- NTFS $STANDARD_INFORMATION timestamp patching via setfattr
+- USN Journal record appending with proper binary format
+- Support for all USN reason flags
+- Comprehensive error handling
+
 ---
 
 ## Current Phase
 
-### 🔄 Phase 0: Preparation
+### 🔄 Phase 3: NTFS Services (67% complete)
 
-**Status**: Ready to begin implementation  
+**Status**: 2 of 3 tasks complete  
+**Completed**:
+- ✅ Task 3.1: MftTimestampPatcher - Sets $STANDARD_INFORMATION timestamps
+- ✅ Task 3.2: UsnJournalWriter - Appends records to $UsnJrnl:$J
+
+**Remaining**:
+- Task 3.3: LogfileWriter (optional) - $LogFile stub generation
+
 **Next Steps**:
-1. Set up Linux development environment (Ubuntu 24.04)
-2. Install system dependencies (libguestfs, hivex, ntfs-3g)
-3. Create test VHDX fixture
-4. Begin Phase 1: Core Infrastructure
+1. Optionally implement LogfileWriter (0.5 days)
+2. Move to Phase 4: Baseline VHDX Automation
+3. Create build_baseline_vhdx.sh script
+4. Create unattend.xml template
 
 ---
 
@@ -52,16 +84,16 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 | Phase | Description | Tasks | Status | Progress |
 |-------|-------------|-------|--------|----------|
 | 0 | Preparation | - | 🟢 Complete | 100% |
-| 1 | Core Infrastructure | 4 | ⚪ Not Started | 0% |
-| 2 | Service Layer Updates | 2 | ⚪ Not Started | 0% |
-| 3 | NTFS Services | 3 | ⚪ Not Started | 0% |
+| 1 | Core Infrastructure | 4 | 🟢 Complete | 100% |
+| 2 | Service Layer Updates | 2 | 🟢 Complete | 100% |
+| 3 | NTFS Services | 3 | 🟡 In Progress | 67% |
 | 4 | Baseline VHDX Automation | 3 | ⚪ Not Started | 0% |
 | 5 | Testing | 2 | ⚪ Not Started | 0% |
 | 6 | Documentation | 3 | ⚪ Not Started | 0% |
 | 7 | Deployment | 2 | ⚪ Not Started | 0% |
 | 8 | Validation | 2 | ⚪ Not Started | 0% |
 
-**Overall Progress**: 5% (Design complete, implementation pending)
+**Overall Progress**: 45% (Phases 0-2 complete, Phase 3 in progress)
 
 ---
 
@@ -79,10 +111,10 @@ This document tracks the progress of migrating ARC from Windows-only to Linux-on
 - [ ] Task 2.1: Update cross_writer.py to Remove pywin32 (1 day)
 - [ ] Task 2.2: Update hive_writer.py to Use Hivex (2 days)
 
-### Phase 3: NTFS Services (0/3 complete)
+### Phase 3: NTFS Services (2/3 complete)
 
-- [ ] Task 3.1: Implement MftTimestampPatcher (1.5 days)
-- [ ] Task 3.2: Implement UsnJournalWriter (2 days)
+- [x] Task 3.1: Implement MftTimestampPatcher (1.5 days) ✅ Complete
+- [x] Task 3.2: Implement UsnJournalWriter (2 days) ✅ Complete
 - [ ] Task 3.3: Implement LogfileWriter (0.5 days, optional)
 
 ### Phase 4: Baseline VHDX Automation (0/3 complete)
