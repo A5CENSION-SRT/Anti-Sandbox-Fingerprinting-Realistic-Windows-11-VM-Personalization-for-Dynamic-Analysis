@@ -1,0 +1,222 @@
+name: ARC CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, arc-linux, develop ]
+  pull_request:
+    branches: [ main, arc-linux ]
+  workflow_dispatch:
+
+jobs:
+  # ============================================================================
+  # Linting and Code Quality
+  # ============================================================================
+  lint:
+    name: Lint and Code Quality
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install linting tools
+        run: |
+          pip install flake8 black mypy pylint
+      
+      - name: Run flake8
+        run: |
+          flake8 core/ services/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 core/ services/ --count --max-complexity=10 --max-line-length=100 --statistics
+      
+      - name: Run black (check only)
+        run: |
+          black --check core/ services/
+      
+      - name: Run mypy
+        run: |
+          mypy core/ services/ --ignore-missing-imports || true
+
+  # ============================================================================
+  # Unit Tests
+  # ============================================================================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libguestfs-tools \
+            python3-guestfs \
+            libhivex-bin \
+            python3-hivex \
+            ntfs-3g \
+            fuse3
+      
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-mock pytest-cov
+      
+      - name: Run unit tests
+        run: |
+          pytest tests/ -v --tb=short --cov=core --cov=services --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-arc
+          fail_ci_if_error: false
+
+  # ============================================================================
+  # Docker Build
+  # ============================================================================
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-24.04
+    needs: [lint, test]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: arc:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test Docker image
+        run: |
+          docker run --rm arc:latest --help
+
+  # ============================================================================
+  # Security Scan
+  # ============================================================================
+  security:
+    name: Security Scan
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # ============================================================================
+  # Documentation Build
+  # ============================================================================
+  docs:
+    name: Documentation Build
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install documentation tools
+        run: |
+          pip install sphinx sphinx-rtd-theme
+      
+      - name: Build documentation
+        run: |
+          # Placeholder for Sphinx build
+          echo "Documentation build placeholder"
+
+  # ============================================================================
+  # Integration Tests (Optional - requires VHDX)
+  # ============================================================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libguestfs-tools \
+            python3-guestfs \
+            libhivex-bin \
+            python3-hivex \
+            qemu-kvm \
+            libvirt-daemon-system
+          pip install -r requirements.txt
+          pip install pytest pytest-mock
+      
+      - name: Run integration tests
+        run: |
+          # Placeholder for integration tests
+          echo "Integration tests require VHDX fixtures"
+
+  # ============================================================================
+  # Release (on tag push)
+  # ============================================================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-24.04
+    needs: [lint, test, docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
