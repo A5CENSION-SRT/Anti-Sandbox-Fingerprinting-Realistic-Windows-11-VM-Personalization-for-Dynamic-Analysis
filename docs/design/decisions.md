@@ -63,9 +63,9 @@ Adopt `PersonaContext` as the single persona schema, extended with 7 additional 
 
 ---
 
-## ADR-002 — Linux host only; libguestfs + hivex + ntfs-3g backend
+## ADR-002 — Linux host only; ntfs-3g direct mount + hivex backend (superseded mount layer by ADR-017)
 
-- Status: accepted
+- Status: accepted (mount-layer implementation superseded by ADR-017; Linux-only decision stands)
 - Date: 2026-04-19
 - Relates to: MP §5, Phase 3, R8, R9, bug #4
 
@@ -73,44 +73,43 @@ Adopt `PersonaContext` as the single persona schema, extended with 7 additional 
 
 `core/vm_manager.py` (278 LoC) implements VHDX mount via PowerShell: `Mount-DiskImage`, `Get-DiskImage`, `Get-Partition`, drive-letter assignment, Z: drive assumptions. `build_vm_image.py` and `mount_existing_vhd.py` call `ctypes.windll.shell32` and `diskpart`. `services/filesystem/cross_writer.py` imports `win32api`, `win32con`, `pywintypes`. The host development and target deployment environment is Linux (Ubuntu 24.04+); none of the above work there.
 
-Linux has three native primitives that cover the full VHDX write surface:
+Linux has two native primitives that cover the full NTFS write surface:
 
-- **libguestfs** (`guestfs` Python binding): QEMU-backed appliance that mounts VHDX/QCOW2/RAW with `add_drive_opts(format="vhdx")`, gives filesystem-level read/write, supports NTFS via its bundled ntfs-3g.
+- **ntfs-3g via FUSE** (direct mount on the real Windows partition): exposes all NTFS operations via standard POSIX file I/O, colon-path ADS syntax (`streams_interface=windows`), `setfattr system.ntfs_times`, `setfattr system.ntfs_attrib_be`. Replaces libguestfs entirely (see ADR-017).
 - **hivex** (`hivex` Python binding): reads + writes Windows registry hive files (SOFTWARE, SYSTEM, NTUSER.DAT, SECURITY, DEFAULT). Preserves security descriptors. Handles all value types including REG_BINARY and REG_MULTI_SZ. Cannot handle values larger than ~1 MB (R26), which we accept.
-- **ntfs-3g via FUSE** (host-side `guestmount`): exposes NTFS metadata APIs guestfs does not: `setfattr system.ntfs_times`, `setfattr system.ntfs_acl`, and raw-stream access via colon-path syntax (required for `$Extend\$UsnJrnl:$J` — see ADR-008).
 
 ### Decision
 
-`core/linux_mount.py::LinuxMountBackend` wraps all three. PowerShell mount is deleted. Every service reaches the VHDX through `LinuxMountBackend` via the `MountManager` facade. The host dev and deploy platform is Ubuntu 24.04+; other Linux distros are best-effort but untested.
+`core/linux_mount.py::LinuxMountBackend` wraps ntfs-3g direct mount + hivex. PowerShell mount is deleted. Every service reaches the Windows partition through `LinuxMountBackend` via the `MountManager` facade. The host dev and deploy platform is Ubuntu 24.04+; other Linux distros are best-effort but untested. libguestfs is not used (ADR-017 supersedes that part of the original ADR-002 decision).
 
 ### Consequences
 
 - Drops the Windows-host dependency entirely. No more Z: drive, no `diskpart`, no `ctypes.windll`.
 - ~620 LoC deleted outright (`vm_manager.py` 278 + `build_vm_image.py` ~250 + `mount_existing_vhd.py` 97 + .bat scripts).
-- `cross_writer.py` loses its pywin32 imports (Phase 3a); NTFS attribute writes go through `MountManager.set_ntfs_attributes(...)` which dispatches to guestfs `setxattr system.ntfs_attrib`.
-- `requirements.txt` drops `pywin32`; adds nothing new at pip level (libguestfs/hivex/ntfs-3g are system packages).
-- The mount sequence gains a two-phase quirk: guestfs for registry + bulk filesystem; unmount guestfs + remount via `guestmount` (ntfs-3g FUSE) for SI timestamp patching and `$UsnJrnl` raw-stream writes. This is a Phase-3/Phase-4b sequencing concern, not a correctness one.
+- `cross_writer.py` loses its pywin32 imports (Phase 3a); NTFS attribute writes go through `MountManager.set_ntfs_attributes(...)` which dispatches to `setfattr system.ntfs_attrib_be` via ntfs-3g.
+- `requirements.txt` drops `pywin32`; adds nothing new at pip level (ntfs-3g/hivex are system packages; libguestfs removed).
+- The two-phase mount sequence (guestfs Phase A + guestmount Phase B) collapses into a single ntfs-3g mount (ADR-017). `host_fuse_mount()` returns the existing mount point immediately.
 - CI grep-gates (A3, A4) enforce no regressions: `import win32`, `from win32`, `powershell`, `Mount-DiskImage`, `Get-DiskImage` must stay at zero.
 
 ### Alternatives considered
 
 - **Keep PowerShell, run via WSL**: drags a Windows host dependency back in, or requires WSL2 which doesn't expose block devices cleanly.
-- **Raw `ntfs-3g` only, skip libguestfs**: would require us to reimplement disk-partition discovery, VHDX container parsing, and mount orchestration. libguestfs does all of it and is a well-maintained dependency.
-- **`mount.ntfs-3g` without libguestfs, via `qemu-nbd`**: works but is fragile under VHDX (nbd-backed VHDX needs kernel modules that aren't universally available). libguestfs's appliance isolates that complexity.
+- **libguestfs + ntfs-3g** (original plan): adds QEMU appliance overhead (~30 s startup) and a two-phase mount complexity with no benefit now that we target a real partition. Replaced by ADR-017.
 
 ---
 
-## ADR-003 — Baseline VHDX is post-first-boot (OOBE complete); ARC is offline-inject only
+## ADR-003 — Windows partition must be post-OOBE and fully shut down; ARC is offline-inject only
 
-- Status: accepted
-- Date: 2026-04-19
-- Relates to: MP §7.3, Phase 8, R1
+- Status: accepted (updated for dual-boot per ADR-017; VHDX build scripts removed)
+- Date: 2026-04-19 (updated 2026-04-27)
+- Relates to: MP §7.3, Phase 8, R1, ADR-017
 
 ### Context
 
-The user asked whether ARC could inject into a never-booted Windows ISO directly. Several NTFS and hive structures only come into existence — with correct internal headers — after Windows's own NTFS driver and registry manager see them once:
+Several NTFS and hive structures only come into existence — with correct internal headers — after
+Windows's own NTFS driver and registry manager see them at least once:
 
-| Structure                      | In fresh ISO          | Post first-boot |
+| Structure                      | Never-booted state    | Post-OOBE state |
 | ------------------------------ | --------------------- | --------------- |
 | `$Extend\$UsnJrnl:$J` + `$Max` | zero-sized or absent  | initialised     |
 | `$LogFile`                     | tiny                  | ~64 MB          |
@@ -119,24 +118,29 @@ The user asked whether ARC could inject into a never-booted Windows ISO directly
 | `Windows\System32\winevt\Logs` | empty channels        | real channels   |
 | Hive SOFTWARE                  | minimal, ~5-10 MB     | ~100 MB         |
 
-If ARC forges `$UsnJrnl` headers against a never-booted image, `chkdsk` on next boot treats them as corruption and nukes them. If ARC writes registry keys before the hive has been seen by Windows even once, hive recovery on first boot can roll back the writes.
+Additionally, Windows Fast Startup (hybrid shutdown) leaves the NTFS volume dirty. ntfs-3g refuses
+to mount a dirty volume read-write (see ADR-017, `docs/research/mount_strategy.md` §2).
 
 ### Decision
 
-The ARC pipeline runs on a VHDX that has completed OOBE (Out-of-Box Experience), i.e. Windows has rebooted at least once in user context and shut down cleanly. `scripts/build_baseline_vhdx.sh` automates this via `virt-install` with `examples/unattend.xml` — unattended install, `<FirstLogonCommands>` sits idle 3 minutes to let Windows build journals and logs, then `shutdown /s /t 0`. The result is archived once per Windows SKU (e.g., Win11_23H2.vhdx) and copied per analyst run. ARC itself never creates, boots, snapshots, or live-manages VMs.
+ARC runs on a Windows 11 partition in a dual-boot setup that has: (1) completed OOBE, (2) has
+Fast Startup disabled (`powercfg /h off`), and (3) was fully shut down before the Ubuntu session
+where ARC runs. ARC never creates, boots, snapshots, or live-manages VMs or partitions. There is
+no baseline VHDX — the real dual-boot partition is the ARC target.
 
 ### Consequences
 
-- ARC's input is always "a Windows install that has run at least once". This makes documentation and runbooks simpler: one baseline, many injections.
-- `scripts/build_baseline_vhdx.sh` + `examples/unattend.xml` are first-class deliverables (Phase 8).
-- We avoid an entire class of NTFS/registry header-forgery bugs that would otherwise require reverse-engineering Windows's on-first-mount repair logic.
-- Storage cost: a baseline VHDX is ~15 GB; archive once per SKU.
-- Operator must rebuild baseline when a new Windows SKU / feature update ships. Not frequent (≤ 2× per year).
+- ARC's input is always "a dual-boot Windows install that completed OOBE and is powered off".
+- `scripts/build_baseline_vhdx.sh` and `examples/unattend.xml` are removed (no VM to build).
+- Phase 8 delivers a dual-boot setup checklist instead of virt-install automation.
+- No per-SKU baseline storage overhead. When Windows updates: boot Windows, let it update, shut down.
+- We avoid NTFS/registry header-forgery bugs that would require reverse-engineering on-first-boot repair logic.
 
 ### Alternatives considered
 
-- **ARC runs during first-boot via `FirstLogonCommands`**: injects a live dependency on a running Windows guest (Powershell scripts, reboot orchestration). Defeats the "offline rewriter" design and re-introduces the Windows-host coupling ADR-002 removes.
-- **ARC forges all headers offline**: requires reverse-engineering `$UsnJrnl` init sequences, hive-log checksum fixups, event-log provider template pre-population. Months of work, fragile against Windows updates.
+- **Maintain a VHDX library per SKU**: requires virt-install automation, libguestfs overhead, image management. Removed by ADR-017.
+- **ARC runs during first-boot via `FirstLogonCommands`**: defeats the offline-only design.
+- **ARC forges all headers offline**: months of reverse-engineering work; fragile against Windows updates.
 
 ---
 
@@ -600,13 +604,70 @@ Phase 0 produces the initial set:
 
 ---
 
+## ADR-017 — Dual-boot NTFS direct mount via ntfs-3g replaces VHDX + libguestfs
+
+- Status: accepted
+- Date: 2026-04-27
+- Relates to: ADR-002 (supersedes mount layer), ADR-003 (updates baseline concept), Phase 3, Phase 8
+
+### Context
+
+The original ADR-002 specified libguestfs (QEMU appliance) for VHDX container handling, with a
+second FUSE phase via `guestmount` for ADS/xattr writes. The deployment target has shifted from
+a standalone VHDX image to a dual-boot machine where Windows 11 and Ubuntu coexist on the same
+hardware. The Windows NTFS partition is directly accessible from Ubuntu as a block device
+(`/dev/nvme0n1p3` or similar).
+
+Key problems with the VHDX + libguestfs approach on this target:
+- libguestfs adds ~30 s QEMU appliance startup per run; no benefit when a real partition is
+  mounted in ~1 s.
+- The two-phase sequence (guestfs Phase A + guestmount Phase B) was an artefact of guestfs's
+  limitations with ADS/xattr. ntfs-3g mounted directly supports both in one phase.
+- libguestfs requires additional system packages (~300 MB) and Python bindings that are
+  awkward to install on Ubuntu 24.04.
+- The VHDX image concept is unnecessary — the real Windows partition on the dual-boot machine
+  IS the baseline; no copy/move needed.
+
+### Decision
+
+`LinuxMountBackend` mounts the Windows NTFS partition directly via ntfs-3g FUSE
+(`mount -t ntfs-3g ... -o uid=...,streams_interface=windows,allow_other`). libguestfs is removed
+entirely. The two-phase mount sequence collapses to a single mount. `host_fuse_mount()` returns
+the existing mount point (no second subprocess call). The partition path is configured in
+`config.yaml::windows_partition` and overrideable via `--partition` CLI flag.
+
+### Consequences
+
+- `LinuxMountBackend` constructor changes from `vhdx_path: Path` to `partition: str, mount_point: Path`.
+- All file I/O methods (`read_bytes`, `write_bytes`, `mkdir_p`, etc.) use standard Python `Path`
+  operations on the mount point instead of guestfs API calls.
+- `hivex` still opens a `/tmp` copy of each hive for crash-safety; the copy source is now the
+  mounted path directly (no `g.read_file()` call needed).
+- `apt install libguestfs-tools python3-guestfs guestmount` removed from setup instructions.
+- `scripts/build_baseline_vhdx.sh` and `examples/unattend.xml` removed (Phase 8 becomes a
+  dual-boot setup checklist, not a VM-build script).
+- Pre-flight: `LinuxMountBackend.mount()` calls `ntfsfix --clear-dirty` check before mounting;
+  raises `LinuxMountBackendError` if the volume is dirty.
+- Startup overhead: ~1 s (ntfs-3g mount) vs ~30 s (libguestfs QEMU appliance).
+
+### Alternatives considered
+
+- **Keep libguestfs, add direct-mount as fallback**: unnecessary complexity; the direct mount
+  is strictly better on the new target.
+- **Use in-kernel ntfs3 driver**: does not support `streams_interface=windows` for ADS colon-path
+  access; `system.ntfs_times` xattr is undocumented in kernel ntfs3. ntfs-3g required.
+- **qemu-nbd to expose VHDX then ntfs-3g**: fragile kernel module dependency; no benefit if we
+  target a real partition.
+
+---
+
 ## Index
 
 | ADR | Title | Date | Status |
 | --- | ----- | ---- | ------ |
 | 001 | Unify on `PersonaContext`; delete `ProfileContext` | 2026-04-19 | accepted |
-| 002 | Linux host only; libguestfs + hivex + ntfs-3g | 2026-04-19 | accepted |
-| 003 | Baseline VHDX is post-first-boot; offline-inject only | 2026-04-19 | accepted |
+| 002 | Linux host only; ntfs-3g direct mount + hivex (mount layer superseded by ADR-017) | 2026-04-19 | accepted |
+| 003 | Windows partition post-OOBE, fully shut down; offline-inject only | 2026-04-19 | accepted |
 | 004 | Default timeline = 360 days; bounds 30..730 | 2026-04-19 | accepted |
 | 005 | Single `EventScheduler` owns time + RNG | 2026-04-19 | accepted |
 | 006 | `ServiceContext` dataclass replaces `context: dict` | 2026-04-19 | accepted |
@@ -620,9 +681,10 @@ Phase 0 produces the initial set:
 | 014 | Rename `services/generators/` → `services/expansion/` | 2026-04-19 | accepted |
 | 015 | Test migration is its own phase (Phase 9) with CI grep-gates | 2026-04-19 | accepted |
 | 016 | Research committed under `docs/research/`; `.gitignore` keeps docs | 2026-04-19 | accepted |
+| 017 | Dual-boot NTFS direct mount via ntfs-3g replaces VHDX + libguestfs | 2026-04-27 | accepted |
 
 ---
 
-**Next ADR ID**: 017.
+**Next ADR ID**: 018.
 
 When adding: append the body, add an Index row, update `docs/MASTER_PLAN.md` §4 if the decision changes the refactor plan, and cross-link from the relevant research doc.

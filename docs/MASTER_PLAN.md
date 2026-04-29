@@ -23,7 +23,7 @@
 
 ## 1. Executive summary
 
-**ARC** = *Artifact Reality Composer*. Given a Windows 11 VHDX, ARC rewrites it so it no longer looks like a sterile analysis VM — adding 360 days of coherent user activity across registry, filesystem, NTFS journal, event logs, browser history, and VM-detection-marker scrubbing.
+**ARC** = *Artifact Reality Composer*. Given a dual-boot machine with Windows 11 installed, ARC writes to the Windows NTFS partition offline (from Ubuntu) so it no longer looks like a sterile analysis VM — adding 360 days of coherent user activity across registry, filesystem, NTFS journal, event logs, browser history, and VM-detection-marker scrubbing. No VHDX image is used; ARC mounts the real partition directly via ntfs-3g.
 
 **Current state** is broken in six independently critical ways:
 
@@ -34,7 +34,7 @@
 5. **Stub artifacts**. Prefetch files 512 B, registry hives 8 KB, evtx 69 KB, docs 8 per user. VHDX delta ~70 MB.
 6. **All files share the same timestamp**. No cross-domain temporal coherence; no NTFS $UsnJrnl synthesis; no SI/FN divergence.
 
-**Target**: Linux-host, unified schema, wired expansion, real-density artifacts, coherent cross-domain timeline over 360 days, VM-detection keys scrubbed.
+**Target**: Linux-host dual-boot setup, unified schema, wired expansion, real-density artifacts, coherent cross-domain timeline over 360 days, VM-detection keys scrubbed. ntfs-3g direct partition mount replaces VHDX + libguestfs (ADR-017).
 
 ---
 
@@ -66,7 +66,7 @@ Linux host (Ubuntu 24.04+)
 │   ├── persona_loader.py      (NEW — replaces ProfileEngine)
 │   ├── service_context.py     (NEW — typed context dataclass passed to services)
 │   ├── event_scheduler.py     (NEW — cross-domain event stream)
-│   ├── linux_mount.py         (NEW — libguestfs + hivex + ntfs-3g backend)
+│   ├── linux_mount.py         (REWRITTEN — ntfs-3g direct partition mount + hivex; no libguestfs)
 │   ├── mount_manager.py       (rewritten — delegates to linux_mount)
 │   ├── orchestrator.py        (rewritten — unified persona → seeds → scheduler → services)
 │   ├── timestamp_service.py   (kept — portable)
@@ -121,11 +121,10 @@ Linux host (Ubuntu 24.04+)
 │   └── {developer,office_user,home_user}.yaml  (NEW — PersonaContext-shaped)
 │
 ├── scripts/
-│   └── build_baseline_vhdx.sh      (NEW — virt-install automation)
+│   └── dual_boot_setup_checklist.md (NEW — operator checklist for dual-boot prep)
 │
 ├── examples/
-│   ├── unattend.xml                (NEW — silent-install answer file)
-│   └── libvirt-profile-template.xml (NEW — SMBIOS/MAC spoof reference)
+│   └── libvirt-profile-template.xml (NEW — SMBIOS/MAC spoof reference for analysis VM)
 │
 ├── docs/
 │   ├── MASTER_PLAN.md              (this file)
@@ -159,8 +158,8 @@ Linux host (Ubuntu 24.04+)
 | ID      | Decision                                                                                    | Recorded in           |
 | ------- | ------------------------------------------------------------------------------------------- | --------------------- |
 | ADR-001 | Unify on `PersonaContext` (25 fields). Delete `ProfileContext`.                             | §6, Phase 1           |
-| ADR-002 | Linux host only. libguestfs + hivex + ntfs-3g. Delete PowerShell mounter.                   | §5, §6, Phase 3       |
-| ADR-003 | Baseline VHDX = post-first-boot (OOBE complete). ARC is offline-inject only.                | §7.3, Phase 8         |
+| ADR-002 | Linux host only. ntfs-3g direct mount + hivex. Delete PowerShell mounter. (mount layer superseded by ADR-017) | §5, §6, Phase 3 |
+| ADR-003 | Windows partition post-OOBE, fully shut down (not hibernated). ARC is offline-inject only.  | §7.3, Phase 8         |
 | ADR-004 | Default timeline = 360 days (was 90). Validated 30 ≤ timeline ≤ 730.                        | Phase 4c              |
 | ADR-005 | Single `EventScheduler`; no service calls `datetime.now()` / `Random(N)` directly.          | §7, Phase 4a          |
 | ADR-006 | `ServiceContext` dataclass replaces `context: dict` in `BaseService.apply()`.               | Phase 1               |
@@ -174,6 +173,7 @@ Linux host (Ubuntu 24.04+)
 | ADR-014 | `services/generators/` renamed to `services/expansion/` to avoid collision with `services/browser/generators/`. | Phase 2   |
 | ADR-015 | Tests migrated in their own phase with CI grep-gates; not a "rerun" afterthought.           | Phase 9               |
 | ADR-016 | Every research doc goes into git under `docs/research/`; `.gitignore` must not exclude `docs/`. | R24, Phase 0     |
+| ADR-017 | Dual-boot NTFS direct mount via ntfs-3g replaces VHDX + libguestfs (supersedes ADR-002 mount layer). | §5, Phase 3, Phase 8 |
 
 ---
 
@@ -183,17 +183,23 @@ Linux host (Ubuntu 24.04+)
 
 ```bash
 apt install -y \
-    libguestfs-tools libguestfs-dev python3-guestfs \
+    ntfs-3g fuse3 attr \
     libhivex-bin python3-hivex \
-    ntfs-3g fuse3 guestmount \
-    virtinst qemu-system-x86 libvirt-daemon-system \
     sleuthkit
 ```
+
+`ntfs-3g` provides the FUSE-based read-write NTFS driver (direct partition mount, ADR-017).
+`attr` provides `setfattr`/`getfattr` for NTFS xattr writes (`system.ntfs_times`, `system.ntfs_attrib_be`).
+`libhivex-bin` + `python3-hivex` provide offline registry hive editing.
+`sleuthkit` provides `istat`/`fls`/`tsk_usnjrnl` for acceptance testing.
+
+libguestfs, guestmount, virtinst, qemu-system-x86, and libvirt-daemon-system are **not used** (ADR-017).
 
 ### 5.2 Python (`requirements.txt`)
 
 **Drop**: `pywin32`.
-**Add**: `guestfs` (provided by system package), `hivex` (system package), `python-evtx` (read-only, for template extraction), `python-docx`, `openpyxl`, `reportlab` (already present).
+**Add**: `hivex` (system package), `python-evtx` (read-only, for template extraction), `python-docx`, `openpyxl`, `reportlab` (already present).
+`guestfs` (libguestfs Python binding) is also dropped — not used in the dual-boot approach (ADR-017).
 
 ### 5.3 Inside-VM validation tools (optional, for acceptance only)
 
@@ -203,8 +209,9 @@ apt install -y \
 
 ```bash
 export GEMINI_API_KEY=...          # Phase 0 optional; presets work without
-export LIBGUESTFS_BACKEND=direct    # faster than default libvirt backend
 ```
+
+`LIBGUESTFS_BACKEND` is no longer needed (libguestfs removed, ADR-017).
 
 ---
 
@@ -247,10 +254,10 @@ export LIBGUESTFS_BACKEND=direct    # faster than default libvirt backend
 | `services/registry/hive_writer.py` (956 LoC)       | Replace hand-rolled binary writes with hivex API; preserve `HiveOperation` / `HiveWriter` facade.  |
 | `services/filesystem/prefetch.py` (291 LoC)        | Real v30/v31 format; 15–80 KB per file; consumes PrefetchAppSeed.                                  |
 | `services/eventlog/evtx_writer.py` (603 LoC)       | Multi-chunk (64 KB each); reference templates extracted from a real Win11 Security.evtx.           |
-| `services/filesystem/cross_writer.py` (279 LoC)    | Strip pywin32; guestfs/ntfs-3g attribute writes.                                                   |
+| `services/filesystem/cross_writer.py` (279 LoC)    | Strip pywin32; ntfs-3g xattr writes via setfattr.                                                  |
 | `services/filesystem/document_generator.py` (673 LoC) | Consume expansion bundle.                                                                       |
 | `services/browser/{history,downloads,bookmarks}.py` | Consume scheduler events; stop `Random(42)`.                                                      |
-| `arc_wizard.py` (25 KB)                            | Linux flow; no Z: drive; libguestfs paths.                                                         |
+| `arc_wizard.py` (25 KB)                            | Linux flow; no Z: drive; ntfs-3g direct partition mount.                                           |
 | `verify_realism.py` (21 KB)                        | 90 → 360 days; add `TemporalCoherenceCheck` hooks; cross-domain consistency checks.                |
 | `evaluation/density_analyzer.py`                   | Real baselines (registry 50 000; filesystem 10 000; browser 500).                                  |
 
@@ -269,7 +276,7 @@ export LIBGUESTFS_BACKEND=direct    # faster than default libvirt backend
 | `core/persona_context.py`                                              | Canonical schema (migrated from `services/ai/schemas.py::PersonaContext`). |
 | `core/persona_loader.py`                                               | YAML → PersonaContext; replaces ProfileEngine.     |
 | `core/service_context.py`                                              | Typed `ServiceContext` dataclass.                  |
-| `core/linux_mount.py`                                                  | libguestfs + hivex + ntfs-3g backend.              |
+| `core/linux_mount.py`                                                  | ntfs-3g direct partition mount + hivex backend (no libguestfs, ADR-017). |
 | `core/event_scheduler.py`                                              | Cross-domain event stream.                         |
 | `services/expansion/__init__.py`                                       | Facade (after rename).                             |
 | `services/ntfs/mft_timestamp_patcher.py`                               | SI patching via ntfs-3g.                           |
@@ -286,9 +293,8 @@ export LIBGUESTFS_BACKEND=direct    # faster than default libvirt backend
 | `profiles/presets/developer.yaml`                                      | PersonaContext preset.                             |
 | `profiles/presets/office_user.yaml`                                    | PersonaContext preset.                             |
 | `profiles/presets/home_user.yaml`                                      | PersonaContext preset.                             |
-| `scripts/build_baseline_vhdx.sh`                                       | virt-install automation.                           |
-| `examples/unattend.xml`                                                | Silent-install answer file.                        |
-| `examples/libvirt-profile-template.xml`                                | SMBIOS/MAC/disk-serial reference.                  |
+| `scripts/dual_boot_setup_checklist.md`                                 | Operator checklist: dual-boot partition prep, Fast Startup disable, OOBE. |
+| `examples/libvirt-profile-template.xml`                                | SMBIOS/MAC/disk-serial reference for analysis VM.  |
 | `docs/research/{mount_strategy,ntfs_journal,time_integrity,vm_detection_evasion,windows_artifact_baselines}.md` | Research archive. |
 | `docs/design/decisions.md`                                             | ADR log.                                           |
 | `services/ai/prompts/{registry_artifacts,evtx_events,prefetch_apps}.txt` | New LLM prompts.                                 |
@@ -432,14 +438,14 @@ Acceptance: `pafish` / `Al-Khaser` flags ≤ 10 (baseline unmodified VBox ~50+).
 
 | Tag | Issue | Sev | Mitigation |
 | --- | --- | --- | --- |
-| R1  | libguestfs cannot cleanly write `\$Extend\$UsnJrnl:$J` | H | ADR-008: ntfs-3g FUSE + USN_RECORD_V3 Python appender |
-| R2  | guestfs `utimens` sets only $STANDARD_INFORMATION, not $FILE_NAME | M | ADR-009: accept SI-only; SI/FN divergence is realistic signal |
+| R1  | ntfs-3g ADS colon-path write to `\$Extend\$UsnJrnl:$J` requires `streams_interface=windows` | H | ADR-008: mount with that option; USN_RECORD_V3 Python appender |
+| R2  | ntfs-3g `setfattr system.ntfs_times` sets only $STANDARD_INFORMATION, not $FILE_NAME | M | ADR-009: accept SI-only; SI/FN divergence is realistic signal |
 | R3  | Hive `.LOG1`/`.LOG2` replay rolls back hivex writes | H | ADR-010: delete logs after hivex commit |
 | R4  | $LogFile is circular + replayed; missing LSN entries are a Triforce tell | L | Accept v1; document in `time_integrity.md` |
 | R5  | SMBIOS / DMI / CPUID is 100% hypervisor; ARC cannot spoof | M | ADR-011: provide libvirt XML reference; registry reflection scrubbed |
 | R6  | Deterministic reproducibility under scheduler non-trivial | M | Scheduler owns RNG; `child_rng(name)` per service |
 | R7  | Hive companion log checksum mismatch → boot loop | H | Same as R3 + audit log warning on failed deletion |
-| R8  | `cross_writer.py` imports pywin32 — Linux blocker | H | Phase 3a: strip; use guestfs attribute APIs |
+| R8  | `cross_writer.py` imports pywin32 — Linux blocker | H | Phase 3a: strip; use ntfs-3g xattr via setfattr |
 | R9  | `build_vm_image.py` + `mount_existing_vhd.py` use Windows ctypes | H | Delete (§6.1) |
 | R10 | `core/llm_client.py` vs `services/ai/gemini_client.py` | L | ADR-007: both kept, different roles |
 | R11 | 6 pre-generated profiles in old schema | L | Delete (§6.1) |
@@ -592,7 +598,7 @@ Phase 0  → 1  → 3a → 3  → 2  → 4c → 4a → 4  → 4b → 7  → 8  �
                                hidden: bool = False, system: bool = False,
                                archive: bool = True) -> None: ...
    ```
-   Implementation is platform-dispatched in Phase 3 (`LinuxMountBackend` uses guestfs `setxattr system.ntfs_attrib`).
+   Implementation in Phase 3: `LinuxMountBackend.set_ntfs_attributes()` calls `setfattr -n system.ntfs_attrib_be` via ntfs-3g on the mounted path.
 
 **Tests**:
 - `tests/test_services/test_cross_writer.py` — if it existed (check) — remove pywin32-specific assertions.
@@ -603,67 +609,107 @@ Phase 0  → 1  → 3a → 3  → 2  → 4c → 4a → 4  → 4b → 7  → 8  �
 
 ---
 
-### Phase 3 — Linux mount backend (libguestfs + hivex + ntfs-3g)
+### Phase 3 — Linux mount backend (ntfs-3g direct partition mount + hivex) [ADR-017]
 
-**Goal**: replace PowerShell mounter with a Linux-native backend.
+**Goal**: replace PowerShell mounter with a Linux-native backend that mounts the Windows NTFS
+partition directly from Ubuntu. No VHDX, no libguestfs.
 
 **Pre-reqs**: Phase 3a complete.
 
 **Steps**:
 
-1. **Create `core/linux_mount.py`**:
+1. **Rewrite `core/linux_mount.py`** — change constructor and all I/O methods (ADR-017):
    ```python
    class LinuxMountBackend:
-       def __init__(self, vhdx_path: Path): ...
-       def mount(self) -> None:
-           """libguestfs add_drive + launch + inspect_os + mount('/dev/sdaN', '/')."""
-       def unmount(self) -> None:
-           """umount_all + shutdown; return clean."""
+       def __init__(self, partition: str, mount_point: Path): ...
+       # partition: e.g. "/dev/nvme0n1p3"; mount_point: e.g. Path("/mnt/arc_windows")
 
-       def read_bytes(self, path: str) -> bytes: ...
+       def mount(self) -> None:
+           """Pre-flight dirty check (ntfsfix), then:
+           sudo mount -t ntfs-3g -o uid=<uid>,gid=<gid>,streams_interface=windows,allow_other
+               <partition> <mount_point>
+           """
+       def unmount(self) -> None:
+           """sync; sudo umount <mount_point>."""
+
+       # All I/O methods use standard Python Path operations on mount_point:
+       def read_bytes(self, path: str) -> bytes: ...   # (mount_point / path).read_bytes()
        def write_bytes(self, path: str, data: bytes) -> None: ...
-       def mkdir_p(self, path: str) -> None: ...
+       def mkdir_p(self, path: str) -> None: ...        # os.makedirs(mount_point / path)
+       def exists(self, path: str) -> bool: ...
+       def rm(self, path: str) -> None: ...
        def utimens(self, path: str, atime: datetime, mtime: datetime) -> None: ...
+       # setfattr system.ntfs_times via subprocess (ntfs-3g xattr)
        def set_ntfs_attributes(self, path: str, *, hidden=False, system=False, archive=True) -> None: ...
+       # setfattr system.ntfs_attrib_be via subprocess
 
        def open_hive(self, hive_path: str) -> HivexHandle:
-           """hivex.Hivex(local_file_path, write=True)."""
-
+           """Copy hive from mount_point to /tmp; hivex.Hivex(tmp_path, write=True)."""
        def commit_hive(self, handle: HivexHandle) -> None:
-           """h.commit(None); then delete .LOG1/.LOG2 (R3, R7, R28)."""
+           """h.commit(None); copy /tmp back to mount_point; delete .LOG1/.LOG2 (ADR-010)."""
 
        def host_fuse_mount(self) -> Path:
-           """guestmount via ntfs-3g for raw stream work (Phase 4b)."""
-
-       def host_fuse_unmount(self) -> None: ...
+           """Return self._mount_point — already a FUSE mount. No subprocess call."""
+       def host_fuse_unmount(self) -> None:
+           """No-op — same mount is used end-to-end."""
    ```
-2. **Rewrite `core/mount_manager.py`** to delegate to `LinuxMountBackend` but preserve the existing `resolve(relative_path)` API — paths returned are still opaque handles the services pass around, but internally they're guestfs paths, not host paths.
-3. **Rewrite `services/registry/hive_writer.py`** to use hivex API:
+2. **Add `windows_partition` and `windows_mount_point` to `config.yaml`**:
+   ```yaml
+   windows_partition: "/dev/nvme0n1p3"   # set per machine; override with --partition
+   windows_mount_point: "/mnt/arc_windows"
+   ```
+3. **Add `--partition` CLI flag** to `main.py` and `arc_wizard.py` (overrides `config.yaml`).
+4. **Add partition discovery utility** `core/partition_discovery.py`:
+   ```python
+   def find_windows_partition() -> str:
+       """Walk lsblk JSON output; return device path of unmounted NTFS system partition."""
+   ```
+   Used when `config.yaml::windows_partition` is not set.
+5. **Rewrite `core/mount_manager.py`** to delegate to `LinuxMountBackend` with the new
+   constructor signature. Preserve the existing `resolve(relative_path)` API for services.
+6. **Rewrite `services/registry/hive_writer.py`** to use hivex API (unchanged from the old plan
+   — the `open_hive` / `commit_hive` contract stays the same, now backed by the direct-mount
+   copy-to-tmp approach):
    ```python
    class HiveWriter:
-       def __init__(self, backend: LinuxMountBackend): ...
        def apply_operations(self, hive_path: str, ops: list[HiveOperation]) -> None:
            with self._backend.open_hive(hive_path) as h:
                for op in ops:
-                   op.execute(h)   # hivex calls: node_add_child, node_set_value, node_delete_child
-               self._backend.commit_hive(h)
+                   op.execute(h)
    ```
-   Preserve the `HiveOperation` and `RegistryValueType` API surface so the 5 domain registry services and the anti-fingerprint scrubbers keep working.
-4. **Delete `core/vm_manager.py`**.
-5. **Delete root scripts**: `build_vm_image.py`, `mount_existing_vhd.py`.
-6. **Delete** `install_*.bat`, `quick_install.bat`, `run_local_model.bat`.
-7. **Update `requirements.txt`**: drop `pywin32`.
-8. **Update `SETUP.md`, `ENV_SETUP.md`, `START_HERE.md`**: Linux install steps from §5.1.
-9. **Rewrite `arc_wizard.py`** to use `LinuxMountBackend`; remove Z:-drive logic.
+   Preserve the `HiveOperation` and `RegistryValueType` API surface.
+7. **Delete `core/vm_manager.py`**.
+8. **Delete root scripts**: `build_vm_image.py`, `mount_existing_vhd.py`.
+9. **Delete** `install_*.bat`, `quick_install.bat`, `run_local_model.bat`.
+10. **Update `requirements.txt`**: drop `pywin32`. Do NOT add `guestfs`.
+11. **Update `SETUP.md`, `ENV_SETUP.md`, `START_HERE.md`**: Linux install steps from §5.1
+    (ntfs-3g, attr, libhivex-bin, python3-hivex, sleuthkit).
+12. **Rewrite `arc_wizard.py`** to use `LinuxMountBackend`; remove Z:-drive logic; add
+    `--partition` flag handling.
+13. **Pre-flight check** (R28): before any hivex writes, verify `.LOG1`/`.LOG2` are present
+    and writable on the mounted path. Skip hive with WARN on failure.
 
 **Tests**:
-- `tests/test_core/test_linux_mount.py` — mount a tiny reference VHDX fixture; verify `read_bytes(/Windows/System32/drivers/etc/hosts)` returns plausible content.
-- Rewrite `tests/test_services/test_registry_writer.py` against hivex API.
+- `tests/test_core/test_linux_mount.py` — mount the configured Windows partition (or a
+  loop-mounted NTFS image as a test fixture); verify `read_bytes("/Windows/System32/drivers/etc/hosts")` succeeds; verify `write_bytes` creates a file visible on the mount; verify hive round-trip (read → modify → commit → verify change on mount).
+- Rewrite `tests/test_services/test_registry_writer.py` against hivex API on mounted path.
 
 **CI gate**:
 - `grep -rn 'powershell\|Mount-DiskImage\|Get-DiskImage' core/ services/` returns 0 (A4).
+- `grep -rn 'import guestfs\|guestfs.GuestFS\|guestmount' core/ services/` returns 0 (new gate A4b).
 
-**Acceptance**: `python -c "from core.linux_mount import LinuxMountBackend; b = LinuxMountBackend('fixture.vhdx'); b.mount(); print(b.read_bytes('/Windows/System32/drivers/etc/hosts')[:40]); b.unmount()"` succeeds on Linux host.
+**Acceptance**: with the Windows partition mounted at `/mnt/arc_windows`:
+```bash
+python -c "
+from pathlib import Path
+from core.linux_mount import LinuxMountBackend
+b = LinuxMountBackend('/dev/nvme0n1p3', Path('/mnt/arc_windows'))
+b.mount()
+print(b.read_bytes('/Windows/System32/drivers/etc/hosts')[:40])
+b.unmount()
+"
+```
+succeeds, prints hosts file content, leaves no stale mount.
 
 ---
 
@@ -812,25 +858,29 @@ Phase 0  → 1  → 3a → 3  → 2  → 4c → 4a → 4  → 4b → 7  → 8  �
    ```python
    class MftTimestampPatcher(BaseService):
        def apply(self, ctx: ServiceContext) -> None:
-           # Precondition: guestfs unmounted; ntfs-3g FUSE mounted (backend.host_fuse_mount()).
+           # No pre-condition: ntfs-3g is already mounted (host_fuse_mount() returns mount_point directly).
+           mount_point = ctx.mount.backend.host_fuse_mount()
            for event in ctx.scheduler.events_of("FILE_CREATE", "FILE_MODIFY"):
-               patch_si_times(fuse_path / event.payload["path"], event.timestamp)
+               fuse_path = mount_point / event.payload["path"].lstrip("/\\").replace("\\", "/")
+               patch_si_times(fuse_path, event.timestamp)
            # $FILE_NAME left at create-time (ADR-009).
    ```
-   Use `os.setxattr(path, "system.ntfs_times", struct.pack(...))` via ntfs-3g.
+   Use `subprocess.run(["setfattr", "-n", "system.ntfs_times", "-v", hex_val, str(fuse_path)])` via ntfs-3g.
 2. **Create `services/ntfs/usn_journal_writer.py`**:
    ```python
    class UsnJournalWriter(BaseService):
        def apply(self, ctx: ServiceContext) -> None:
+           mount_point = ctx.mount.backend.host_fuse_mount()
            # Read $Max header for NextUsn.
            # For each FILE_CREATE/MODIFY/DELETE/CLOSE event, pack USN_RECORD_V3 and append to $J stream.
            # Update $Max.NextUsn.
    ```
-   ntfs-3g supports colon-syntax stream access: `open("/mnt/arc/\$Extend/\$UsnJrnl:$J", "r+b")`.
+   ntfs-3g with `streams_interface=windows` mount option exposes colon-path ADS:
+   `open(mount_point / "$Extend" / "$UsnJrnl:$J", "r+b")` (Python path is literal, no shell escaping needed).
 3. **Create `services/ntfs/logfile_writer.py`** — best-effort stub; Phase 1 returns empty op-list but logs intent (R4).
 4. **Orchestrator phase `NTFS = 4.5`** — runs after filesystem/registry/browser/evtx so the events to journal already exist as scheduler records.
-5. **Phase 3 extension**: `LinuxMountBackend.host_fuse_mount()` / `host_fuse_unmount()` wrapping `guestmount` / `guestunmount`.
-6. **Pre-flight check** (R28): verify `.LOG1` / `.LOG2` are writable and deletable before any hivex writes.
+5. **No Phase 3 extension needed**: `host_fuse_mount()` returns the existing mount point immediately (ADR-017 collapsed the two-phase sequence). No `guestmount`/`guestunmount` subprocess.
+6. **Pre-flight check** (R28): verify `.LOG1` / `.LOG2` are writable and deletable on the mounted path before any hivex writes.
 
 **Tests**:
 - `tests/test_services/test_mft_timestamp_patcher.py` — write file, patch, read back via `istat` (Sleuth Kit) to assert SI times.
@@ -873,39 +923,51 @@ Phase 0  → 1  → 3a → 3  → 2  → 4c → 4a → 4  → 4b → 7  → 8  �
 
 ---
 
-### Phase 8 — Baseline build + libvirt spoofing templates
+### Phase 8 — Dual-boot setup checklist + libvirt spoofing template [ADR-017]
 
-**Goal**: operator recipe end-to-end.
+**Goal**: operator recipe end-to-end for the dual-boot target. No VHDX to build.
 
 **Steps**:
 
-1. **Create `scripts/build_baseline_vhdx.sh`**:
-   ```bash
-   #!/bin/bash
-   set -euo pipefail
-   ISO=$1; UNATTEND=$2; OUT=$3; SIZE=${4:-80G}
-   qemu-img create -f vhdx "$OUT" "$SIZE"
-   virt-install \
-       --name arc-baseline --memory 4096 --vcpus 4 \
-       --disk path="$OUT",format=vhdx \
-       --cdrom "$ISO" --initrd-inject "$UNATTEND" \
-       --os-variant win11 --graphics spice --wait -1
-   # virt-install exits on shutdown initiated by unattend.xml FirstLogonCommands
-   virsh undefine arc-baseline
+1. **Create `scripts/dual_boot_setup_checklist.md`** — one-time setup guide for the operator:
    ```
-2. **Create `examples/unattend.xml`** — answer file with:
-   - `<AutoLogon>` single-user skip.
-   - `<OOBE><SkipMachineOOBE>true</SkipMachineOOBE>`.
-   - `<FirstLogonCommands>` that wait 3 minutes (powershell `Start-Sleep 180`) then `shutdown /s /t 0`.
-3. **Create `examples/libvirt-profile-template.xml`** — domain XML with:
+   1. Install Windows 11 on the target machine (alongside Ubuntu).
+   2. Boot into Windows, complete OOBE (create user account, skip optional setup).
+   3. Open an elevated PowerShell and run:
+          powercfg.exe /hibernate off
+      This disables Fast Startup permanently. Confirm: no hiberfil.sys in C:\.
+   4. Shut down Windows fully (Start → Shut Down, not Restart).
+   5. Boot into Ubuntu.
+   6. Find the Windows partition:
+          sudo blkid -t TYPE=ntfs
+   7. Record the UUID. Add to ARC's config.yaml:
+          windows_partition: "/dev/nvme0n1p3"   # or whatever blkid shows
+          windows_mount_point: "/mnt/arc_windows"
+   8. Verify ARC can mount:
+          python main.py --preset home_user --dry-run
+   ```
+2. **Create `examples/libvirt-profile-template.xml`** — domain XML for the analysis VM where
+   the modified Windows partition is loaded (read-only snapshot for malware analysis):
    - `<sysinfo type='smbios'>` Dell OptiPlex 7090 strings.
-   - `<interface><mac address='00:1b:21:xx:xx:xx'>` Intel OUI.
+   - `<interface><mac address='00:1b:21:xx:xx:xx'>` Intel OUI (not QEMU `52:54:00`).
    - `<disk ... serial='S5GYNX0N712345Y'>`.
    - `<cpu mode='host-passthrough'>`.
    - `<feature><hidden state='on'/></feature>` for hypervisor CPUID hiding.
-4. **Update `docs/wizard_guide.md`** — Linux end-to-end with these scripts.
+   Note: the libvirt template is for analysis-VM boot after ARC injection, not for ARC itself.
+   ARC runs natively on Ubuntu against the mounted partition.
+3. **Update `docs/wizard_guide.md`** — end-to-end dual-boot workflow with the checklist above.
+4. **Update `docs/architecture.md`** — replace VHDX diagram with partition diagram.
+5. **Add sudoers rule** to `scripts/dual_boot_setup_checklist.md`:
+   ```
+   # /etc/sudoers.d/arc
+   Cmnd_Alias ARC_MOUNT = /usr/bin/mount -t ntfs-3g *, /usr/bin/umount /mnt/arc_windows, /usr/bin/ntfsfix *
+   %sudo ALL=(ALL) NOPASSWD: ARC_MOUNT
+   ```
 
-**Acceptance** (A20): `virsh define ./examples/libvirt-profile-template.xml && virsh start arc-test` boots cleanly.
+**Acceptance** (A20): After ARC injection, boot the dual-boot Windows partition; Windows reaches
+the desktop with no chkdsk repair triggered and no bluescreen. The artifact delta is visible in
+`C:\Users\<persona>\Documents` and registry. Then optionally snapshot the partition and load into
+the libvirt template for malware-analysis isolation.
 
 ---
 
@@ -1011,7 +1073,7 @@ Phase 0  → 1  → 3a → 3  → 2  → 4c → 4a → 4  → 4b → 7  → 8  �
 | A17 | `docs/research/*.md` + `docs/design/decisions.md` committed                                    | 0        |
 | A18 | No ARC-written file has ctime == mtime == atime                                                | 4a       |
 | A19 | Hive `.LOG1`/`.LOG2` deletion verified; no registry rollback on boot                           | 3        |
-| A20 | `virsh define && virsh start` of libvirt template succeeds                                     | 8        |
+| A20 | After ARC injection, dual-boot Windows boots to desktop with no chkdsk repair triggered        | 8        |
 
 ---
 
@@ -1031,28 +1093,37 @@ Phase 0  → 1  → 3a → 3  → 2  → 4c → 4a → 4  → 4b → 7  → 8  �
 ## 13. Operator runbook (post-refactor)
 
 ```bash
-# One-time host setup
-sudo apt install libguestfs-tools libhivex-bin ntfs-3g guestmount virtinst qemu-system-x86 libvirt-daemon-system
+# ── One-time host setup ──────────────────────────────────────────────────────
+sudo apt install ntfs-3g fuse3 attr libhivex-bin python3-hivex sleuthkit
 pip install -r requirements.txt
 export GEMINI_API_KEY=...
 
-# One-time per Windows SKU: build baseline VHDX
-./scripts/build_baseline_vhdx.sh \
-    --iso ~/isos/Win11_23H2.iso \
-    --unattend ./examples/unattend.xml \
-    --out ~/vms/baseline.vhdx --size 80G
+# ── One-time dual-boot setup (Windows side — do this before the Ubuntu session) ──
+# In Windows (elevated PowerShell):
+#   powercfg.exe /hibernate off
+#   shutdown.exe /s /t 0
+# (Full shutdown, no Fast Startup)
 
-# Per analyst run: inject
-cp ~/vms/baseline.vhdx ~/vms/run-042.vhdx
+# ── One-time config: identify your Windows partition ────────────────────────
+sudo blkid -t TYPE=ntfs    # find /dev/nvme0n1p3 or /dev/sda3
+# Edit config.yaml:
+#   windows_partition: "/dev/nvme0n1p3"
+#   windows_mount_point: "/mnt/arc_windows"
+
+# ── Per analyst run: inject ──────────────────────────────────────────────────
+# (Windows must be powered off, not hibernated)
 python main.py \
-    --vhdx ~/vms/run-042.vhdx \
     --ai-generate --occupation "Software Engineer" \
     --interests gaming,open-source \
     --timeline-days 360 \
     --random-seed 4242 \
-    --audit-log ~/vms/run-042.audit.jsonl
+    --audit-log ~/arc-run-042.audit.jsonl
+# ARC mounts the Windows partition, injects artifacts, unmounts cleanly.
 
-# Boot for analysis
+# ── Boot for analysis (optional: via libvirt snapshot) ───────────────────────
+# Take a snapshot of the partition for isolated analysis:
+#   dd if=/dev/nvme0n1p3 of=~/snapshots/run-042.img bs=4M status=progress
+# Then boot the snapshot image in the libvirt template:
 virsh define ./examples/libvirt-profile-template.xml
 virsh start arc-run-042
 ```
@@ -1072,10 +1143,10 @@ virsh start arc-run-042
 **After (rescue)**:
 - 1 schema (`core/persona_context.py`); Chromium schema is orthogonal (SQLite, not profile).
 - 1 orchestrator with Phase 0 (persona build) + Phase 1.5 (expansion) + Phase 2 (scheduling) baked in.
-- Linux mount (`core/linux_mount.py`).
+- Dual-boot ntfs-3g direct mount (`core/linux_mount.py`); no libguestfs, no VHDX, single mount phase.
 - Wired expansion (`services/expansion/`).
 - v30 Prefetch 10–80 KB, hives at baseline size (100 MB+ SOFTWARE), evtx 10–20 MB per log.
-- ≥ 500 MB VHDX delta.
+- ≥ 500 MB artifact delta on the Windows partition.
 
 ---
 
