@@ -30,14 +30,24 @@ wheels/
 log.txt
 audit.log
 
-# Project Specific - Outputs
+# ---------------------------------------------------------------------------
+# Generated test/pipeline output directories — NEVER commit these
+# ---------------------------------------------------------------------------
 output/
+output_*/
+
+# All test run outputs
+tests/pipeline_test/
+tests/run_*/
+tests/run_developer/
+tests/run_office_user/
+tests/run_home_user/
+
+# Legacy output dir names
 test_output/
 test_vhd_output/
 vhd_output/
 *.output/
-
-# Project Specific - Temporary Mounts and Builds
 test_mount/
 test_mount_dev/
 test_mount_prod/
@@ -45,21 +55,52 @@ temp_vhd_build/
 temp_test/
 test_vhd/
 
-# Project Specific - Verification and Diagnostics
-verify_realism.py
-diagnose_failures.py
-verify_out.txt
-verify_clean.txt
-verification_results.txt
-verify_out.txt
+# ---------------------------------------------------------------------------
+# Generated artifact file types (produced by pipeline services)
+# Never commit generated content — only source code and profiles
+# ---------------------------------------------------------------------------
 
-# Binary Assets and VM Images
-images/*.vhd
-images/*.vhdx
+# Documents
+*.docx
+*.xlsx
+*.pptx
+*.pdf
+
+# Media stubs
+*.mp3
+*.mp4
+*.flac
+*.wav
+*.avi
+*.mkv
+
+# Windows forensic artifacts
+*.pf
+*.evtx
+*.lnk
+*.db
+
+# Thumbnail cache
+thumbcache_*.db
+
+# Windows prefetch
+Windows/Prefetch/
+
+# ---------------------------------------------------------------------------
+# VM disk images
+# ---------------------------------------------------------------------------
 *.vhd
 *.vhdx
+*.qcow2
+*.vmdk
+*.raw
+*.img
+images/*.vhd
+images/*.vhdx
 
-# AI Model and Binary Directories
+# ---------------------------------------------------------------------------
+# AI / LLM model binaries
+# ---------------------------------------------------------------------------
 llama-bin/
 model/
 llama_native/
@@ -67,7 +108,9 @@ llama_vulkan/
 llama-*-bin/
 llama_out/
 
-# Other Junk
+# ---------------------------------------------------------------------------
+# Misc generated / junk files
+# ---------------------------------------------------------------------------
 ARC Project Progress Report.pdf
 paper.pdf
 explanation.md
@@ -75,6 +118,9 @@ explain.md
 verification_results.txt
 verify_out.txt
 verify_clean.txt
+audit.log
+
+# Images (keep only source assets, not generated)
 *.png
 *.jpg
 *.jpeg

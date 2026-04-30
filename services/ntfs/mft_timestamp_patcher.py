@@ -104,10 +104,30 @@ class MftTimestampPatcher(BaseService):
                 install_time as the timeline anchor.
 
         Silently skips files that do not exist on the mounted filesystem.
+        Silently skips entirely on non-Linux platforms (os.setxattr is
+        Linux-only and only meaningful on an ntfs-3g FUSE mount).
 
         Raises:
             MftTimestampPatcherError: On fatal xattr write error.
         """
+        # Platform guard: os.setxattr is Linux-only and only works on
+        # ntfs-3g FUSE mounts.  Skip gracefully on Windows and macOS.
+        if not hasattr(os, "setxattr"):
+            logger.info(
+                "MftTimestampPatcher: os.setxattr not available on this platform "
+                "(requires Linux + ntfs-3g FUSE mount). Skipping."
+            )
+            return
+
+        # Check that an ntfs backend is actually mounted
+        backend = getattr(ctx.mount, "backend", None)
+        if backend is None:
+            logger.info(
+                "MftTimestampPatcher: no NTFS FUSE backend mounted "
+                "(output-directory mode). SI timestamps set via os.utime only."
+            )
+            return
+
         if ctx.scheduler is None:
             logger.warning("MftTimestampPatcher: no scheduler; skipping")
             return

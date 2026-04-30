@@ -54,6 +54,39 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# NullHiveWriter — no-op sentinel used when hivex is unavailable
+# ---------------------------------------------------------------------------
+
+class _NullHiveWriter:
+    """Silent no-op HiveWriter used when hivex is not installed.
+
+    Registry services are injected with this object instead of ``None``
+    so they never hit ``AttributeError: 'NoneType' object has no attribute
+    'execute_operations'`` on non-Linux (development) hosts.
+
+    All write methods are silent no-ops; read methods raise HiveWriterError
+    so callers know no data is available.
+    """
+
+    def execute_operations(self, operations) -> None:  # noqa: D401
+        """No-op: hivex not available on this platform."""
+        logger.debug(
+            "NullHiveWriter: hivex not installed — skipping %d registry operation(s). "
+            "Run on Linux with 'apt install libhivex-bin python3-hivex' for full registry support.",
+            len(list(operations)),
+        )
+
+    def key_exists(self, hive_rel_path: str, key_path: str) -> bool:
+        return False
+
+    def read_value(self, hive_rel_path: str, key_path: str, value_name: str):
+        raise HiveWriterError("hivex not available on this platform")
+
+    def preflight_hive_logs(self, hive_rel_paths) -> None:
+        pass  # no-op
+
+
+# ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
@@ -148,10 +181,18 @@ class HiveWriter(BaseService):
 
     def __init__(self, mount_manager: Any, audit_logger: Any) -> None:
         if not _HAS_HIVEX:
-            raise HiveWriterError(
-                "hivex is required but not installed. "
-                "Run: apt install libhivex-bin python3-hivex"
+            # Log a clear warning but don't raise — the NullHiveWriter
+            # sentinel will be returned by get_hive_writer() instead.
+            logger.warning(
+                "HiveWriter: hivex not available (platform: %s). "
+                "Registry writes will be silently skipped. "
+                "Install on Linux with: apt install libhivex-bin python3-hivex",
+                __import__("sys").platform,
             )
+            # Store None so apply() and execute_operations() can check
+            self._mount_manager = None
+            self._audit_logger = audit_logger
+            return
         self._mount_manager = mount_manager
         self._audit_logger = audit_logger
 
@@ -162,7 +203,21 @@ class HiveWriter(BaseService):
     def apply(self, ctx: "ServiceContext") -> None:
         pass  # operations are submitted via execute_operations()
 
-    # -- public API ---------------------------------------------------------
+    def execute_operations(self, operations):
+        """Execute batched registry operations, or no-op if hivex unavailable."""
+        if not _HAS_HIVEX or self._mount_manager is None:
+            logger.debug(
+                "HiveWriter.execute_operations: hivex not available, skipping %d op(s)",
+                len(list(operations)),
+            )
+            return
+        # Call the real implementation
+        return self._execute_operations_impl(operations)
+
+    def key_exists(self, hive_rel_path: str, key_path: str) -> bool:
+        if not _HAS_HIVEX or self._mount_manager is None:
+            return False
+        return self._key_exists_impl(hive_rel_path, key_path)
 
     def preflight_hive_logs(self, hive_rel_paths: Sequence[str]) -> None:
         """Pre-flight check: verify .LOG1 / .LOG2 companion files are deletable.
@@ -207,8 +262,8 @@ class HiveWriter(BaseService):
                     ) from exc
         logger.debug("Preflight hive-log check passed for %d hive(s)", len(list(hive_rel_paths)))
 
-    def execute_operations(self, operations: Sequence[HiveOperation]) -> None:
-        """Execute a batch of registry operations grouped by hive file.
+    def _execute_operations_impl(self, operations: Sequence[HiveOperation]) -> None:
+        """Internal: Execute a batch of registry operations grouped by hive file.
 
         Args:
             operations: Sequence of HiveOperation to execute.
@@ -231,13 +286,15 @@ class HiveWriter(BaseService):
         Falls back to regipy for reads (hivex read API is more verbose).
 
         Raises:
-            HiveWriterError: If the hive, key, or value is not found.
+            HiveWriterError: If hivex not available, or hive, key, or value not found.
         """
+        if not _HAS_HIVEX or self._mount_manager is None:
+            raise HiveWriterError("hivex not available on this platform")
         hive_abs = self._resolve_hive_path(hive_rel_path)
         return self._read_value_hivex(hive_abs, key_path, value_name)
 
-    def key_exists(self, hive_rel_path: str, key_path: str) -> bool:
-        """Return True if *key_path* exists in the hive."""
+    def _key_exists_impl(self, hive_rel_path: str, key_path: str) -> bool:
+        """Internal: Return True if *key_path* exists in the hive."""
         hive_abs = self._resolve_hive_path(hive_rel_path)
         try:
             h = _hivex.Hivex(str(hive_abs))

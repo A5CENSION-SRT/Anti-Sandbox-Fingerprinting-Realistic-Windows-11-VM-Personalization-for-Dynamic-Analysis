@@ -156,13 +156,36 @@ class UsnJournalWriter(BaseService):
     def apply(self, ctx: "ServiceContext") -> None:
         """Write USN records for all scheduler FILE_* events.
 
-        Opens ``$Extend/$UsnJrnl/$J`` for append via the FUSE mount. If the
-        path is inaccessible (non-FUSE host filesystem, or offline vhd), the
-        service logs a warning and returns without error.
+        Opens ``$Extend/$UsnJrnl:$J`` for append via the FUSE mount.  If the
+        path is inaccessible (non-FUSE host filesystem, offline vhd, or no
+        ntfs-3g mount), the service logs a warning and returns without error.
+
+        This service is a no-op on Windows hosts and non-FUSE output dirs:
+        - The ADS colon path ``$UsnJrnl:$J`` is only accessible via ntfs-3g
+          FUSE on Linux; Windows does not expose it as a regular file path.
+        - Without a live ntfs-3g mount the file simply will not exist.
 
         Raises:
             UsnJournalWriterError: On fatal write error after open succeeds.
         """
+        # Platform guard: ADS colon paths only work on Linux via ntfs-3g FUSE.
+        import sys
+        if sys.platform != "linux":
+            logger.info(
+                "UsnJournalWriter: ADS paths require Linux + ntfs-3g FUSE. "
+                "Skipping on %s.", sys.platform
+            )
+            return
+
+        # Check that an ntfs backend is actually mounted
+        backend = getattr(ctx.mount, "backend", None) if ctx.mount else None
+        if backend is None:
+            logger.info(
+                "UsnJournalWriter: no NTFS FUSE backend mounted "
+                "(output-directory mode). USN journal skipped."
+            )
+            return
+
         if ctx.scheduler is None:
             logger.warning("UsnJournalWriter: no scheduler; skipping")
             return
@@ -186,6 +209,13 @@ class UsnJournalWriter(BaseService):
             logger.warning(
                 "UsnJournalWriter: no write access to %s; "
                 "ensure ntfs-3g FUSE mount is active",
+                journal_path,
+            )
+            return
+        except FileNotFoundError:
+            logger.warning(
+                "UsnJournalWriter: journal path %s does not exist. "
+                "Requires ntfs-3g FUSE mount with streams_interface=windows.",
                 journal_path,
             )
             return
