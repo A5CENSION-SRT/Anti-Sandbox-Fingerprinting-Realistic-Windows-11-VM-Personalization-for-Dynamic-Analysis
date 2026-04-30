@@ -376,10 +376,41 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="DEVICE",
         help=(
-            "Block device of the Windows NTFS partition to inject into, "
-            "e.g. /dev/nvme0n1p3.  "
-            "Overrides config.yaml::windows_partition.  "
-            "If omitted and windows_partition is not set, auto-discovery is attempted."
+            "Block device of the NTFS partition to inject into, "
+            "e.g. /dev/loop0p3 (VM image) or /dev/nvme0n1p3 (dual-boot, requires --force-partition).  "
+            "Overrides config.yaml::windows_partition."
+        ),
+    )
+
+    parser.add_argument(
+        "--image",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Path to a raw Windows disk image file (.img / .raw) to inject into.  "
+            "ARC will attach it via losetup automatically.  "
+            "For QCOW2: convert first with 'qemu-img convert -f qcow2 -O raw in.qcow2 out.img'.  "
+            "This is the RECOMMENDED safe mode for testing."
+        ),
+    )
+
+    parser.add_argument(
+        "--image-partition",
+        type=int,
+        default=3,
+        metavar="N",
+        help="Partition number inside the disk image to use (default: 3, typical Windows data partition).",
+    )
+
+    parser.add_argument(
+        "--force-partition",
+        action="store_true",
+        help=(
+            "Allow writing to a PHYSICAL block device (dual-boot mode).  "
+            "REQUIRED when --partition points to a real drive (/dev/sd*, /dev/nvme*).  "
+            "Without this flag, ARC will refuse to touch physical drives.  "
+            "You will be asked for explicit confirmation before any writes."
         ),
     )
 
@@ -389,7 +420,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         metavar="DIR",
         help=(
-            "Host directory to mount the Windows partition at "
+            "Host directory to mount the Windows partition or image at "
             "(default: /mnt/arc_windows or config.yaml::windows_mount_point)."
         ),
     )
@@ -613,45 +644,118 @@ def main() -> int:
                 return rc
 
         # ---------------------------------------------------------------------------
-        # Dual-boot NTFS direct mount (ADR-017) — must happen BEFORE orchestrator.initialize()
-        # so the backend is wired into MountManager via config["_ntfs_backend"].
+        # SAFE MOUNT BLOCK (ADR-017 revised)
+        #
+        # Three supported modes, in priority order:
+        #
+        #   Mode A — VM disk image  (--image disk.img)
+        #     Safest. ARC attaches the image via losetup, runs SafetyGuard,
+        #     then mounts via ntfs-3g.  No risk to physical drives.
+        #
+        #   Mode B — Explicit partition (--partition /dev/X [--force-partition])
+        #     Physical drives REQUIRE --force-partition + interactive confirmation.
+        #     SafetyGuard blocks hibernated/dirty partitions unconditionally.
+        #
+        #   Mode C — Output directory  (no --image, no --partition)
+        #     Default safe mode.  All artifacts written to --output dir locally.
+        #     NO partition is touched.  Suitable for dry-runs, CI, development.
+        #
+        # Auto-discovery of physical drives has been REMOVED — it was the root
+        # cause of dual-boot corruption (silently mounted a hibernated Windows
+        # partition and called remove_hiberfile, destroying hiberfil.sys + BCD).
         # ---------------------------------------------------------------------------
-        partition = (
-            getattr(args, "partition", None)
-            or config.get("windows_partition")
-        )
-        if partition and not args.dry_run:
-            try:
-                from core.linux_mount import LinuxMountBackend
-                from pathlib import Path as _Path
-                mp = (
-                    getattr(args, "mount_point", None)
-                    or (config.get("windows_mount_point") and _Path(config["windows_mount_point"]))
-                    or _Path("/mnt/arc_windows")
+
+        _image_arg   = getattr(args, "image", None)
+        _partition_arg = getattr(args, "partition", None) or config.get("windows_partition")
+        _force        = getattr(args, "force_partition", False)
+        _mp_arg       = getattr(args, "mount_point", None)
+        _loop_device: str | None = None  # track for cleanup in finally
+
+        if not args.dry_run:
+            from pathlib import Path as _Path
+
+            mp: _Path = (
+                _mp_arg
+                or (_Path(config["windows_mount_point"]) if config.get("windows_mount_point") else None)
+                or _Path("/mnt/arc_windows")
+            )
+
+            # ── Mode A: VM disk image ──────────────────────────────────────────
+            if _image_arg is not None:
+                image_path = _Path(_image_arg)
+                logger.info("Image mode: attaching %s via losetup …", image_path)
+                try:
+                    from core.safety_guard import attach_image_as_loopback, preflight_check
+                    from core.linux_mount import LinuxMountBackend
+
+                    part_idx = getattr(args, "image_partition", 3)
+                    _loop_device = attach_image_as_loopback(image_path, partition_index=part_idx)
+                    config["_loop_device"] = _loop_device
+                    logger.info("Loopback device: %s", _loop_device)
+
+                    # Safety check (always non-interactive for loopback images)
+                    check = preflight_check(
+                        _loop_device, mp,
+                        force_partition=False,
+                        non_interactive=True,
+                    )
+                    if not check.safe_to_proceed:
+                        for err in check.errors:
+                            print(err, file=sys.stderr)
+                        return 2
+
+                    backend = LinuxMountBackend(_loop_device, mp)
+                    backend.mount()
+                    config["mount_path"] = str(mp)
+                    config["_ntfs_backend"] = backend
+                    logger.info("Image %s mounted at %s via %s", image_path, mp, _loop_device)
+
+                except Exception as exc:
+                    logger.error("Image mode failed: %s", exc)
+                    print(f"\n{exc}", file=sys.stderr)
+                    return 2
+
+            # ── Mode B: Explicit partition (dual-boot or explicit loopback) ────
+            elif _partition_arg is not None:
+                logger.info("Partition mode: target=%s, force=%s", _partition_arg, _force)
+                try:
+                    from core.safety_guard import preflight_check
+                    from core.linux_mount import LinuxMountBackend
+
+                    # SafetyGuard: classifies device, checks hibernation, prompts if physical
+                    check = preflight_check(
+                        _partition_arg, mp,
+                        force_partition=_force,
+                        non_interactive=False,
+                    )
+                    if not check.safe_to_proceed:
+                        for err in check.errors:
+                            print(err, file=sys.stderr)
+                        return 2
+
+                    for warning in check.warnings:
+                        logger.warning("SafetyGuard: %s", warning)
+
+                    backend = LinuxMountBackend(_partition_arg, mp)
+                    backend.mount()
+                    config["mount_path"] = str(mp)
+                    config["_ntfs_backend"] = backend
+                    logger.info("Partition %s mounted at %s", _partition_arg, mp)
+
+                except Exception as exc:
+                    logger.error("Partition mount failed: %s", exc)
+                    print(f"\n{exc}", file=sys.stderr)
+                    return 2
+
+            # ── Mode C: Output directory (no image, no partition) ──────────────
+            else:
+                # Safe default: write to local output directory, no mounting.
+                logger.info(
+                    "Output-directory mode: writing artifacts to %s (no partition mounted)",
+                    config.get("mount_path", "./output"),
                 )
-                backend = LinuxMountBackend(partition, mp)
-                backend.mount()
-                config["mount_path"] = str(mp)
-                config["_ntfs_backend"] = backend
-                logger.info("NTFS partition %s mounted at %s", partition, mp)
-            except Exception as exc:
-                logger.error("Failed to mount partition %s: %s", partition, exc)
-                return 2
-        elif not partition and not args.dry_run and not config.get("windows_partition"):
-            # No partition configured — try auto-discovery
-            try:
-                from core.partition_discovery import find_windows_partition
-                from core.linux_mount import LinuxMountBackend
-                from pathlib import Path as _Path
-                discovered = find_windows_partition()
-                mp = _Path("/mnt/arc_windows")
-                backend = LinuxMountBackend(discovered, mp)
-                backend.mount()
-                config["mount_path"] = str(mp)
-                config["_ntfs_backend"] = backend
-                logger.info("Auto-discovered and mounted %s at %s", discovered, mp)
-            except Exception as exc:
-                logger.warning("Partition auto-discovery failed: %s — using local output dir", exc)
+                # Auto-discovery of physical partitions intentionally REMOVED.
+                # See docs/recovery_guide.md for the incident that motivated this.
 
         # Initialize audit logger
         audit_path = Path(config.get("audit_log_path", "audit.log"))
@@ -745,6 +849,14 @@ def main() -> int:
     finally:
         if "orchestrator" in locals():
             orchestrator.cleanup()
+        # Detach loopback device created by --image mode
+        _ld = locals().get("_loop_device") or (config.get("_loop_device") if "config" in locals() else None)
+        if _ld:
+            try:
+                from core.safety_guard import detach_loopback
+                detach_loopback(_ld)
+            except Exception as _exc:
+                logger.warning("Could not detach loopback %s: %s", _ld, _exc)
 
 
 if __name__ == "__main__":

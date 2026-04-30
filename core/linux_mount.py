@@ -1,12 +1,22 @@
-"""ntfs-3g direct partition mount backend (ADR-017).
+"""ntfs-3g direct partition mount backend (ADR-017) — SAFE version.
 
-Provides read/write access to a dual-boot Windows NTFS partition mounted
-directly from Ubuntu via ntfs-3g.  No libguestfs, no VHDX, no guestmount.
+Provides read/write access to an NTFS partition (loopback VM image or
+explicitly-specified dual-boot partition) via ntfs-3g FUSE.
 
-The Windows partition must be fully shut down (Fast Startup / hibernation
-disabled) before calling mount().
+SAFETY RULES enforced by this module
+--------------------------------------
+1. Never calls ``ntfsfix -d`` — clearing the dirty bit bypasses Windows'
+   own crash-safety mechanism and enables writes to hibernated partitions.
+2. Never uses ``remove_hiberfile`` — that permanently destroys the user's
+   Windows session (hiberfil.sys) and causes BCD corruption (0xc0000098).
+3. If the partition is dirty (hibernated / Fast Startup), mount() ABORTS
+   with a clear error message explaining how to fix it.
+4. The caller (main.py) MUST run SafetyGuard.preflight_check() BEFORE
+   calling mount().  SafetyGuard owns the partition-type classification
+   and interactive confirmation logic.
 
-Dependencies (system packages):
+Dependencies (system packages)::
+
     apt install -y ntfs-3g fuse3 attr libhivex-bin python3-hivex sleuthkit
 """
 
@@ -222,48 +232,76 @@ class LinuxMountBackend:
     # -- lifecycle --
 
     def mount(self) -> None:
-        """Pre-flight dirty-bit clear, then ntfs-3g FUSE mount.
+        """Pre-flight dirty-bit check, then ntfs-3g FUSE mount.
+
+        ⚠️  Safety contract
+        ------------------
+        This method deliberately does NOT call ``ntfsfix -d`` and does NOT
+        use the ``remove_hiberfile`` ntfs-3g option.  Both of those bypass
+        Windows' filesystem safety mechanisms and corrupt hibernated partitions.
+
+        If the NTFS dirty bit is set (Windows hibernated / Fast Startup active),
+        this method raises :class:`LinuxMountBackendError` with instructions
+        on how to resolve the situation safely.
 
         Raises:
-            LinuxMountBackendError: If ntfsfix or mount fails.
+            LinuxMountBackendError: If the partition is dirty/hibernated,
+                or if the ntfs-3g mount command fails.
         """
         if self._mounted:
             return
 
         self._mount_point.mkdir(parents=True, exist_ok=True)
 
-        # Clear the NTFS dirty bit (in case Windows hibernated unexpectedly).
-        # Non-fatal: a clean shutdown leaves no dirty bit, ntfsfix exits 0.
+        # ── Dirty-bit / hibernation check ────────────────────────────────────
+        # We use ntfsfix WITHOUT -d (no fix, just diagnose) to detect whether
+        # the partition is unclean.  If it is, we ABORT — we must never mount
+        # a hibernated Windows partition read-write.
         ntfsfix = subprocess.run(
-            ["sudo", "ntfsfix", "-d", self._partition],
+            ["sudo", "ntfsfix", "--no-action", self._partition],
             capture_output=True, text=True,
         )
-        if ntfsfix.returncode != 0:
-            logger.warning(
-                "ntfsfix -d exited %d: %s",
-                ntfsfix.returncode, ntfsfix.stderr.strip(),
+        combined = (ntfsfix.stdout + ntfsfix.stderr).lower()
+        is_dirty = ("hibernat" in combined) or (
+            ntfsfix.returncode != 0 and "dirty" in combined
+        )
+
+        if is_dirty:
+            raise LinuxMountBackendError(
+                f"\n{'='*62}\n"
+                f"  ⛔  MOUNT ABORTED — PARTITION IS DIRTY / HIBERNATED\n"
+                f"{'='*62}\n"
+                f"  Device : {self._partition}\n"
+                f"  The NTFS dirty bit is SET.  Windows did not shut down\n"
+                f"  cleanly (hibernation, Fast Startup, or a crash).\n"
+                f"\n"
+                f"  Writing to a hibernated partition WILL corrupt it.\n"
+                f"  ARC does NOT use 'ntfsfix -d' or 'remove_hiberfile'\n"
+                f"  because those bypass safety and cause BCD corruption.\n"
+                f"\n"
+                f"  ── How to fix: ──────────────────────────────────────\n"
+                f"  Boot Windows, then do a FULL shutdown (not hibernate):\n"
+                f"    Start → Power → hold Shift → click 'Shut down'\n"
+                f"  Disable Fast Startup in Windows:\n"
+                f"    Control Panel → Power Options → 'Turn on fast startup'\n"
+                f"    (uncheck it) → Save changes\n"
+                f"  Then retry ARC from Linux.\n"
+                f"{'='*62}\n"
             )
 
+        # ── FUSE mount (read-write, clean partition only) ─────────────────────
         uid = os.getuid()
         gid = os.getgid()
-        base_opts = (
+        mount_opts = (
             f"uid={uid},gid={gid},"
             "streams_interface=windows,"
             "allow_other,"
             "windows_names"
+            # NOTE: remove_hiberfile is intentionally OMITTED.
+            # NOTE: We do not add 'force' — if ntfs-3g still refuses due to
+            #       a residual dirty flag from an unclean virtual-disk
+            #       snapshot, the user must fix the image first.
         )
-
-        hibernated = ntfsfix.returncode != 0 and "hibernat" in ntfsfix.stderr.lower()
-
-        # If Windows is hibernated, add remove_hiberfile so ntfs-3g can mount rw.
-        # This deletes hiberfil.sys (the hibernated session is lost) but Windows
-        # boots normally from disk — acceptable for offline injection (ADR-003).
-        mount_opts = base_opts + (",remove_hiberfile" if hibernated else "")
-        if hibernated:
-            logger.warning(
-                "Windows partition appears hibernated — mounting with remove_hiberfile. "
-                "Boot Windows after ARC completes to let it run chkdsk if needed."
-            )
 
         result = subprocess.run(
             [

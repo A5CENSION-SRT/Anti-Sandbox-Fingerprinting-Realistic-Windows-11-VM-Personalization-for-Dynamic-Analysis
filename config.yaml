@@ -2,15 +2,33 @@
 # ==============================================
 
 # ---------------------------------------------------------------------------
-# Dual-boot NTFS partition (ADR-017)
-# Set windows_partition to the block device of your Windows NTFS partition.
-# Run `sudo blkid -t TYPE=ntfs` to find it.
-# Leave blank to auto-discover (first unmounted NTFS partition found by lsblk).
-# windows_partition: "/dev/nvme0n1p3"
-# windows_mount_point: "/mnt/arc_windows"
+# Target Mode (choose ONE — see docs/recovery_guide.md for safety details)
 # ---------------------------------------------------------------------------
+#
+# ✅ SAFE — VM disk image (recommended for testing):
+#   Run:  python main.py --image /path/to/windows11.img
+#   Or:   python main.py --image disk.img --image-partition 3
+#
+# ⚠️  ADVANCED — Dual-boot physical partition:
+#   REQUIRES Windows to be FULLY shut down (NOT hibernated/Fast Startup).
+#   Run:  python main.py --partition /dev/nvme0n1p3 --force-partition
+#   Never set windows_partition here for a dual-boot system — use the
+#   CLI flags so you must consciously specify the device each time.
+#
+# ❌ NEVER DO:
+#   - Set windows_partition to your real dual-boot partition in this file
+#   - Run ARC without --dry-run while Windows is in Fast Startup/hibernate
+#   - Use ntfsfix -d manually to "fix" a hibernated partition
+#
+# Leave both commented to use safe output-directory mode (no partition).
+# windows_partition: ""     # e.g. /dev/nvme0n1p3 — set only for one-off VMs
+# windows_mount_point: "/mnt/arc_windows"
 
-# Output directory for generated artifacts (used in standalone/dry-run mode)
+# Safety guard — set to true to allow physical drive access (still requires
+# --force-partition CLI flag AND interactive confirmation at runtime).
+require_explicit_partition: true
+
+# Output directory for generated artifacts (used when no image/partition given)
 mount_path: "./output"
 
 # Profile configuration
