@@ -1,7 +1,16 @@
 # ARC - Artifact Reality Composer Configuration
 # ==============================================
 
-# Output directory for generated artifacts
+# ---------------------------------------------------------------------------
+# Dual-boot NTFS partition (ADR-017)
+# Set windows_partition to the block device of your Windows NTFS partition.
+# Run `sudo blkid -t TYPE=ntfs` to find it.
+# Leave blank to auto-discover (first unmounted NTFS partition found by lsblk).
+# windows_partition: "/dev/nvme0n1p3"
+# windows_mount_point: "/mnt/arc_windows"
+# ---------------------------------------------------------------------------
+
+# Output directory for generated artifacts (used in standalone/dry-run mode)
 mount_path: "./output"
 
 # Profile configuration

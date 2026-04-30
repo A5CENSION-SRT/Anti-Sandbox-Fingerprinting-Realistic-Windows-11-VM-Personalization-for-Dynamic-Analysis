@@ -324,10 +324,11 @@ class Orchestrator:
             OrchestrationError: If initialization fails.
         """
         try:
-            # Mount manager
+            # Mount manager — wire ntfs-3g backend when a partition is active (ADR-017)
             mount_path = Path(self._config.get("mount_path", "./output"))
             mount_path.mkdir(parents=True, exist_ok=True)
-            self._mount_manager = MountManager(str(mount_path))
+            ntfs_backend = self._config.get("_ntfs_backend")
+            self._mount_manager = MountManager(str(mount_path), backend=ntfs_backend)
 
             # Load PersonaContext from YAML — preset or AI-generated
             raw_path = self._config.get("profile_path")

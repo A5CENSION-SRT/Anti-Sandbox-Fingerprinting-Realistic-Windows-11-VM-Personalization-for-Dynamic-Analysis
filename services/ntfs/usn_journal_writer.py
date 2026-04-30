@@ -78,8 +78,10 @@ _USN_CLOSE: int = 0x80000000
 # Fixed header size for V2 (before filename)
 _V2_HEADER_SIZE: int = 60
 
-# Journal stream path relative to NTFS root (FUSE layout uses $-prefixed names)
-_USN_JOURNAL_REL: str = "$Extend/$UsnJrnl/$J"
+# Journal stream path relative to NTFS root.
+# ntfs-3g with streams_interface=windows exposes ADS via colon notation:
+# $UsnJrnl:$J is the data stream, NOT a subdirectory of $UsnJrnl (ADR-008).
+_USN_JOURNAL_REL: str = "$Extend/$UsnJrnl:$J"
 
 # Maximum records to append (keeps the stream size realistic)
 _MAX_RECORDS: int = 50_000
@@ -176,7 +178,7 @@ class UsnJournalWriter(BaseService):
             return
 
         try:
-            journal_path.parent.mkdir(parents=True, exist_ok=True)
+            # $Extend is an NTFS metadata directory — never mkdir it.
             with journal_path.open("ab") as fh:
                 for record in records:
                     fh.write(record)

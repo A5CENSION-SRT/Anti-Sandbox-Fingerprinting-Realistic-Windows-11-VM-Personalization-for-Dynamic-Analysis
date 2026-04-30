@@ -2,8 +2,8 @@
 
 In standalone mode (no backend), resolves paths against a local directory
 suitable for testing and dry-runs.  When a LinuxMountBackend is provided,
-the backend's FUSE mountpoint is used as the root — so all downstream services
-write directly to the mounted NTFS filesystem without any API changes.
+the ntfs-3g FUSE mountpoint is used as the root — so all downstream services
+write directly to the mounted NTFS partition without any API changes.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ class MountManager:
     Args:
         mount_root: Host path to use as the mount root.  Ignored when
             *backend* is supplied (the backend's FUSE mountpoint is used).
-        backend: Optional LinuxMountBackend.  When provided, the VHDX is
-            FUSE-mounted and *mount_root* is derived from the mountpoint.
+        backend: Optional LinuxMountBackend.  When provided, the ntfs-3g
+            mount point is used as the root (ADR-017).
     """
 
     def __init__(
@@ -87,6 +87,14 @@ class MountManager:
         self._backend.set_ntfs_attributes(
             guest_path, hidden=hidden, system=system, archive=archive
         )
+
+    def unmount(self) -> None:
+        """Unmount the NTFS partition via the backend.
+
+        No-op in standalone mode.
+        """
+        if self._backend is not None:
+            self._backend.unmount()
 
     def utimens(
         self,

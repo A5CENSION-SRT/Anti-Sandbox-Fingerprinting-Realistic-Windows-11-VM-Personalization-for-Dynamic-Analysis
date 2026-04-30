@@ -371,10 +371,27 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--vhdx-path",
+        "--partition",
+        type=str,
+        default=None,
+        metavar="DEVICE",
+        help=(
+            "Block device of the Windows NTFS partition to inject into, "
+            "e.g. /dev/nvme0n1p3.  "
+            "Overrides config.yaml::windows_partition.  "
+            "If omitted and windows_partition is not set, auto-discovery is attempted."
+        ),
+    )
+
+    parser.add_argument(
+        "--mount-point",
         type=Path,
         default=None,
-        help="Path to Windows 11 VHDX to mount and infect",
+        metavar="DIR",
+        help=(
+            "Host directory to mount the Windows partition at "
+            "(default: /mnt/arc_windows or config.yaml::windows_mount_point)."
+        ),
     )
 
     # AI Generation options
@@ -595,6 +612,47 @@ def main() -> int:
             if rc != 0:
                 return rc
 
+        # ---------------------------------------------------------------------------
+        # Dual-boot NTFS direct mount (ADR-017) — must happen BEFORE orchestrator.initialize()
+        # so the backend is wired into MountManager via config["_ntfs_backend"].
+        # ---------------------------------------------------------------------------
+        partition = (
+            getattr(args, "partition", None)
+            or config.get("windows_partition")
+        )
+        if partition and not args.dry_run:
+            try:
+                from core.linux_mount import LinuxMountBackend
+                from pathlib import Path as _Path
+                mp = (
+                    getattr(args, "mount_point", None)
+                    or (config.get("windows_mount_point") and _Path(config["windows_mount_point"]))
+                    or _Path("/mnt/arc_windows")
+                )
+                backend = LinuxMountBackend(partition, mp)
+                backend.mount()
+                config["mount_path"] = str(mp)
+                config["_ntfs_backend"] = backend
+                logger.info("NTFS partition %s mounted at %s", partition, mp)
+            except Exception as exc:
+                logger.error("Failed to mount partition %s: %s", partition, exc)
+                return 2
+        elif not partition and not args.dry_run and not config.get("windows_partition"):
+            # No partition configured — try auto-discovery
+            try:
+                from core.partition_discovery import find_windows_partition
+                from core.linux_mount import LinuxMountBackend
+                from pathlib import Path as _Path
+                discovered = find_windows_partition()
+                mp = _Path("/mnt/arc_windows")
+                backend = LinuxMountBackend(discovered, mp)
+                backend.mount()
+                config["mount_path"] = str(mp)
+                config["_ntfs_backend"] = backend
+                logger.info("Auto-discovered and mounted %s at %s", discovered, mp)
+            except Exception as exc:
+                logger.warning("Partition auto-discovery failed: %s — using local output dir", exc)
+
         # Initialize audit logger
         audit_path = Path(config.get("audit_log_path", "audit.log"))
         audit_logger = AuditLogger(audit_path)
@@ -607,19 +665,6 @@ def main() -> int:
         )
 
         orchestrator.initialize()
-
-        # VHDX direct-injection — uses LinuxMountBackend (Phase 8)
-        if args.vhdx_path:
-            try:
-                from core.linux_mount import LinuxMountBackend
-                backend = LinuxMountBackend(args.vhdx_path)
-                backend.mount()
-                config["mount_path"] = str(args.vhdx_path)
-                config["_vhdx_backend"] = backend
-                logger.info("VHDX mounted: %s", args.vhdx_path)
-            except Exception as exc:
-                logger.error("Failed to mount VHDX: %s", exc)
-                return 2
 
         # Register services
         num_services = register_services(orchestrator, args.categories, config=config)

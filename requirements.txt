@@ -15,11 +15,9 @@ google-generativeai>=0.8.0   # Gemini API client for persona/seed generation
 jinja2>=3.1.0                # Template engine for content variation
 
 # ---------------------------------------------------------------------------
-# Linux mount backend (system packages — not pip-installable)
-# Install with: apt install libguestfs-tools python3-guestfs libhivex-bin python3-hivex
-#               apt install ntfs-3g fuse3 guestmount
+# Linux mount backend (system packages — not pip-installable, ADR-017)
+# Install with: apt install ntfs-3g fuse3 attr libhivex-bin python3-hivex sleuthkit
 # ---------------------------------------------------------------------------
-# guestfs          -- provided by system package python3-guestfs
 # hivex            -- provided by system package python3-hivex
 
 # ---------------------------------------------------------------------------
